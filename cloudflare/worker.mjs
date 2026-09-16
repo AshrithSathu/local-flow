@@ -1,3 +1,6 @@
+const AI_QUOTA_MESSAGE =
+  "Cloudflare daily AI allowance exhausted. Enable Workers Paid or wait for the daily reset at 00:00 UTC.";
+const isAiQuotaError = (error) => /used up your daily free allocation/i.test(error?.message || "");
 import {
   cleanupBudgetMs,
   isTechnicalTranscript,
@@ -104,7 +107,14 @@ async function streamNova(request, env) {
     },
     { websocket: true }
   );
-  if (!response.webSocket) return json({ error: { message: "Streaming unavailable" } }, 502);
+  if (!response.webSocket) {
+    if (response.status === 429) {
+      const body = await response.json().catch(() => null);
+      if (isAiQuotaError({ message: JSON.stringify(body) }))
+        return json({ error: { message: AI_QUOTA_MESSAGE } }, 429);
+    }
+    return json({ error: { message: "Streaming unavailable" } }, 502);
+  }
   return response;
 }
 
@@ -283,8 +293,13 @@ export default {
     if (path === "/v1/listen" && request.method === "GET") {
       try {
         return await streamNova(request, env);
-      } catch {
-        return json({ error: { message: "Streaming unavailable" } }, 502);
+      } catch (error) {
+        return json(
+          {
+            error: { message: isAiQuotaError(error) ? AI_QUOTA_MESSAGE : "Streaming unavailable" },
+          },
+          isAiQuotaError(error) ? 429 : 502
+        );
       }
     }
     if (path === "/v1/models" && request.method === "GET")
@@ -305,17 +320,20 @@ export default {
         return await cleanup(request, env);
       return json({ error: { message: "Not found" } }, 404);
     } catch (error) {
-      const status =
-        error.status || (error instanceof SyntaxError || error instanceof TypeError ? 400 : 502);
+      const status = isAiQuotaError(error)
+        ? 429
+        : error.status || (error instanceof SyntaxError || error instanceof TypeError ? 400 : 502);
       return json(
         {
           error: {
             message:
-              status === 413
-                ? "Request is too large"
-                : status === 400
-                  ? "Invalid request"
-                  : "Transcription unavailable; recording can be retried",
+              status === 429
+                ? AI_QUOTA_MESSAGE
+                : status === 413
+                  ? "Request is too large"
+                  : status === 400
+                    ? "Invalid request"
+                    : "Transcription unavailable; recording can be retried",
           },
         },
         status

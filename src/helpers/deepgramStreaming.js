@@ -1,6 +1,17 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
 
+function clarifyCloudflareQuota(error) {
+  if (
+    process.env.LOCAL_FLOW === "1" &&
+    /Unexpected server response: 429/.test(error.message || "")
+  ) {
+    error.message =
+      "Cloudflare daily AI allowance exhausted. Enable Workers Paid or wait for the daily reset at 00:00 UTC.";
+    error.code = "CLOUDFLARE_AI_QUOTA";
+  }
+}
+
 const localFlowProfile = require("../config/localFlow.json");
 const SAMPLE_RATE = 16000;
 const WEBSOCKET_TIMEOUT_MS = 30000;
@@ -336,6 +347,7 @@ class DeepgramStreaming {
       });
 
       this.warmConnection.on("error", (error) => {
+        clarifyCloudflareQuota(error);
         clearTimeout(warmupTimeout);
         debugLogger.error("Deepgram warmup connection error", { error: error.message });
         // Invalidate cached token on auth failure so next attempt fetches fresh
@@ -491,6 +503,7 @@ class DeepgramStreaming {
 
     this.ws.removeAllListeners("error");
     this.ws.on("error", (error) => {
+      clarifyCloudflareQuota(error);
       const wasActive = this.isConnected;
       debugLogger.error("Deepgram WebSocket error", { error: error.message });
       this.cleanup();
@@ -697,6 +710,7 @@ class DeepgramStreaming {
       });
 
       this.ws.on("error", (error) => {
+        clarifyCloudflareQuota(error);
         const wasActive = this.isConnected;
         debugLogger.error("Deepgram WebSocket error", { error: error.message });
         // Invalidate cached token on auth failure so next attempt fetches fresh

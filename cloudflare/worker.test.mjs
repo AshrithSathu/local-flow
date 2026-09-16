@@ -267,3 +267,63 @@ test("cleanup deadline returns raw text and never accepts a late model response"
     assert.equal(result.choices[0].message.content, raw);
   }
 });
+
+test("AI quota failures are actionable without exposing private provider errors", async () => {
+  const quota = {
+    ...env,
+    AI: {
+      run: async () => {
+        throw new Error(
+          "AiError: you have used up your daily free allocation of 10,000 neurons (private request id)"
+        );
+      },
+    },
+  };
+  const stream = await call("/v1/listen", { headers: { ...headers, Upgrade: "websocket" } }, quota);
+  assert.equal(stream.status, 429);
+  assert.match((await stream.json()).error.message, /Enable Workers Paid/);
+  const form = new FormData();
+  form.set("file", new Blob(["audio"], { type: "audio/webm" }), "test.webm");
+  form.set("model", "cloudflare-nova-3");
+  const batch = await call(
+    "/v1/audio/transcriptions",
+    { headers, method: "POST", body: form },
+    quota
+  );
+  assert.equal(batch.status, 429);
+  assert.doesNotMatch(JSON.stringify(await batch.json()), /private request id/);
+  const unavailable = await call(
+    "/v1/listen",
+    { headers: { ...headers, Upgrade: "websocket" } },
+    {
+      ...env,
+      AI: {
+        run: async () => {
+          throw new Error("private capacity error");
+        },
+      },
+    }
+  );
+  assert.equal(unavailable.status, 502);
+});
+
+test("Nova quota rejection returned as an HTTP response is preserved before the upgrade", async () => {
+  const response = await call(
+    "/v1/listen",
+    { headers: { ...headers, Upgrade: "websocket" } },
+    {
+      ...env,
+      AI: {
+        run: async () =>
+          new Response(
+            JSON.stringify({
+              errors: [{ message: "you have used up your daily free allocation" }],
+            }),
+            { status: 429 }
+          ),
+      },
+    }
+  );
+  assert.equal(response.status, 429);
+  assert.match((await response.json()).error.message, /daily AI allowance exhausted/);
+});

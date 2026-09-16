@@ -70,3 +70,9 @@ npm run typecheck
 ```
 
 `cloudflare/.secrets.json`, `.dev.vars`, `.wrangler/`, local `.env` files, and packaged builds are ignored. Never commit credentials or share your local profile. Keep the upstream [MIT license](LICENSE) and attribution when redistributing; bundled third-party assets retain their own licenses.
+
+## Streaming reports “Unexpected server response”
+
+If the account exhausts its daily Workers AI allowance, inference stops even though `/health` and `/v1/models` still work. This fork now returns an actionable quota error instead of hiding it as a streaming 502. Enable Workers Paid in your Cloudflare dashboard to continue beyond the allowance, or wait for the daily reset at **00:00 UTC (05:30 IST)**. See [COSTS.md](COSTS.md) for usage estimates. Microphone permissions and Worker region changes do not restore an exhausted account allowance.
+
+Other provider or network failures can still return 502; do not assume every handshake error is quota exhaustion. Preserve the HTTP status and check actual inference, not just the public health route.

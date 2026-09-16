@@ -334,3 +334,35 @@ test("personal cold connection becomes ready without speech or a server message"
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("personal streaming explains an exhausted allowance instead of an opaque handshake error", async () => {
+  const http = require("node:http");
+  const server = http.createServer((_, response) => {
+    response.writeHead(429);
+    response.end();
+  });
+  server.on("upgrade", (_, socket) => {
+    socket.end("HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const previous = process.env.LOCAL_FLOW;
+  process.env.LOCAL_FLOW = "1";
+  const streaming = new DeepgramStreaming();
+  streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+  try {
+    await assert.rejects(
+      streaming.connect({ token: "test-only", mode: "byok" }),
+      /Cloudflare daily AI allowance exhausted/
+    );
+    await assert.rejects(
+      streaming.warmup({ token: "test-only", mode: "byok" }),
+      /Enable Workers Paid/
+    );
+  } finally {
+    streaming.cleanupWarmConnection();
+    streaming.cleanup();
+    if (previous === undefined) delete process.env.LOCAL_FLOW;
+    else process.env.LOCAL_FLOW = previous;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
