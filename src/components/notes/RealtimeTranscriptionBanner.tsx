@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../../config/localFlow";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Zap, X } from "../icons";
@@ -15,7 +16,7 @@ export default function RealtimeTranscriptionBanner({
     () => localStorage.getItem("realtimeProBannerDismissed") === "true"
   );
 
-  if (dismissed) return null;
+  if (IS_LOCAL_FLOW || dismissed) return null;
 
   const handleDismiss = () => {
     localStorage.setItem("realtimeProBannerDismissed", "true");

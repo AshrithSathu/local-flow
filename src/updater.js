@@ -2,7 +2,9 @@ const { autoUpdater } = require("electron-updater");
 
 // electron-updater can only replace an AppImage on Linux; deb, rpm and tar.gz
 // installs are updated by the package manager instead.
-const isUpdaterSupported = process.platform !== "linux" || Boolean(process.env.APPIMAGE);
+const isPersonalBuild = require("electron").app.getName() === "Local Flow";
+const isUpdaterSupported =
+  !isPersonalBuild && (process.platform !== "linux" || Boolean(process.env.APPIMAGE));
 
 class UpdateManager {
   constructor() {
@@ -27,7 +29,7 @@ class UpdateManager {
   }
 
   setupAutoUpdater() {
-    if (process.env.NODE_ENV === "development") {
+    if (!isUpdaterSupported || process.env.NODE_ENV === "development") {
       return;
     }
 
@@ -168,7 +170,9 @@ class UpdateManager {
       if (!isUpdaterSupported) {
         return {
           updateAvailable: false,
-          message: "Updates are installed through the system package manager",
+          message: isPersonalBuild
+            ? "Rebuild Local Flow to update this personal app"
+            : "Updates are installed through the system package manager",
         };
       }
 
@@ -199,6 +203,7 @@ class UpdateManager {
 
   async downloadUpdate() {
     try {
+      if (!isUpdaterSupported) return { success: false, message: "Updates are disabled" };
       if (process.env.NODE_ENV === "development") {
         return {
           success: false,

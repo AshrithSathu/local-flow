@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import type React from "react";
 import { useTranslation } from "react-i18next";
 import { Home, BarChart3, MessageSquare, NotebookPen, BookOpen, Upload, Blocks } from "./icons";
@@ -26,7 +27,7 @@ export function useControlPanelNavItems(): ControlPanelNavItem[] {
   return [
     { id: "home", label: t("sidebar.home"), icon: Home },
     { id: "insights", label: t("sidebar.insights"), icon: BarChart3 },
-    ...(agentAllowed
+    ...(!IS_LOCAL_FLOW && agentAllowed
       ? [{ id: "chat" as const, label: t("sidebar.chat"), icon: MessageSquare }]
       : []),
     { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
@@ -34,6 +35,8 @@ export function useControlPanelNavItems(): ControlPanelNavItem[] {
       ? [{ id: "upload" as const, label: t("sidebar.upload"), icon: Upload }]
       : []),
     { id: "dictionary", label: t("sidebar.dictionary"), icon: BookOpen },
-    { id: "integrations", label: t("sidebar.integrations"), icon: Blocks },
+    ...(!IS_LOCAL_FLOW
+      ? [{ id: "integrations" as const, label: t("sidebar.integrations"), icon: Blocks }]
+      : []),
   ];
 }

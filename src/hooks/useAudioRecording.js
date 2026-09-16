@@ -434,6 +434,7 @@ export const useAudioRecording = (toast, options = {}) => {
           showDictationError({
             title,
             description,
+            transcript: error?.transcript || "",
             duration: error?.code === "AUTH_EXPIRED" ? 8000 : undefined,
           });
         }
@@ -594,6 +595,8 @@ export const useAudioRecording = (toast, options = {}) => {
               }
             );
 
+          const deliveryStartedAt = performance.now();
+          let deliverySucceeded = false;
           const keepInClipboard = async (delivery) => {
             try {
               const clipboardResult = await window.electronAPI.writeClipboard(result.text);
@@ -616,6 +619,7 @@ export const useAudioRecording = (toast, options = {}) => {
             // down. Injecting the paste shortcut into those held modifiers is
             // what silently loses the transcript, so keep it instead.
             const keptInClipboard = await keepInClipboard("push-force-stopped");
+            deliverySucceeded = keptInClipboard;
             window.electronAPI?.hideDictationPreview?.();
             showDictationError({
               title: t("hooks.audioRecording.pushForceStopped.title"),
@@ -672,6 +676,7 @@ export const useAudioRecording = (toast, options = {}) => {
               },
               "streaming"
             );
+            deliverySucceeded = pasteSucceeded;
             // The text has landed at the cursor; a preview lingering with the
             // final transcript after the paste reads as a stray surface. A
             // failed paste keeps the final flash so the transcript stays
@@ -681,7 +686,27 @@ export const useAudioRecording = (toast, options = {}) => {
               if (result.cleanupFailure) recordCleanupFailure(result.cleanupFailure);
             }
           } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
-            await keepInClipboard("clipboard-only");
+            deliverySucceeded = await keepInClipboard("clipboard-only");
+          }
+
+          if (result.timings?.stopStartedAt !== undefined && !result.assistantConversation) {
+            logger.info(
+              "Dictation delivery timing",
+              {
+                finalSpeechMs: result.timings.transcriptionProcessingDurationMs,
+                cleanupMs: result.timings.reasoningProcessingDurationMs,
+                recoveryMs: result.timings.recoveryDurationMs,
+                deliveryMs: Math.round(performance.now() - deliveryStartedAt),
+                releaseToDeliveryMs: Math.round(performance.now() - result.timings.stopStartedAt),
+                delivery: autoPasteEnabled
+                  ? "paste"
+                  : keepTranscriptionInClipboard
+                    ? "clipboard"
+                    : "history",
+                success: deliverySucceeded,
+              },
+              "streaming"
+            );
           }
 
           if (result.source === "openai" && getSettings().useLocalWhisper) {

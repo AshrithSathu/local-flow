@@ -1,0 +1,17 @@
+{
+  "transcriptionMode": "providers",
+  "cloudTranscriptionMode": "byok",
+  "cloudTranscriptionProvider": "deepgram",
+  "cloudTranscriptionModel": "nova-3",
+  "cloudTranscriptionBaseUrl": "https://local-flow-personal.sathuashrith.workers.dev/v1",
+  "cleanupMode": "providers",
+  "cleanupCloudMode": "byok",
+  "cleanupProvider": "custom",
+  "cleanupModel": "local-flow-cleanup",
+  "cleanupCloudBaseUrl": "https://local-flow-personal.sathuashrith.workers.dev/v1",
+  "useDictationAgent": false,
+  "showTranscriptionPreview": true,
+  "meetingProcessDetection": false,
+  "speakerDiarizationEnabled": false,
+  "audioRetentionDays": 1
+}

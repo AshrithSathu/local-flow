@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../../../config/localFlow";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, UserPlus } from "../../icons";
 import { useTranslation } from "react-i18next";
@@ -138,19 +139,23 @@ export function ContainerOverview({
           </div>
         </div>
 
-        <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
+        {!IS_LOCAL_FLOW && (
+          <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
+        )}
 
-        <OverviewAskSection
-          messages={chat.messages}
-          agentState={chat.agentState}
-          onTextSubmit={chat.sendMessage}
-          onCancel={chat.cancelStream}
-          conversations={chat.conversations}
-          activeConversationId={chat.activeConversationId}
-          onSwitchConversation={chat.switchConversation}
-          onNewChat={chat.startNewChat}
-          onOpenNote={onOpenNote}
-        />
+        {!IS_LOCAL_FLOW && (
+          <OverviewAskSection
+            messages={chat.messages}
+            agentState={chat.agentState}
+            onTextSubmit={chat.sendMessage}
+            onCancel={chat.cancelStream}
+            conversations={chat.conversations}
+            activeConversationId={chat.activeConversationId}
+            onSwitchConversation={chat.switchConversation}
+            onNewChat={chat.startNewChat}
+            onOpenNote={onOpenNote}
+          />
+        )}
 
         <div className="border-t border-border/70 dark:border-white/10">
           <OverviewNoteList

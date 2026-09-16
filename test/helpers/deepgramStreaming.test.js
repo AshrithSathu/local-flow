@@ -4,6 +4,14 @@ const { WebSocketServer } = require("ws");
 
 const DeepgramStreaming = require("../../src/helpers/deepgramStreaming");
 
+test("every Deepgram connection opts out of training and content retention", () => {
+  const streaming = new DeepgramStreaming();
+  for (const language of [undefined, "en", "multi", "hi", "xx"]) {
+    const url = new URL(streaming.buildWebSocketUrl({ language }));
+    assert.equal(url.searchParams.get("mip_opt_out"), "true");
+  }
+});
+
 // Loopback Deepgram: warmup resolves on the socket opening, connect on the
 // first server message, so every accepted socket answers with Metadata.
 async function withMetadataServer(run) {
@@ -259,4 +267,70 @@ test("a re-warm whose options were dropped does not re-authenticate as managed",
 test("the authorization scheme is exported for the canary to reuse", () => {
   assert.equal(DeepgramStreaming.authorizationHeader("byok", "k"), "Token k");
   assert.equal(DeepgramStreaming.authorizationHeader("openwhispr", "k"), "Bearer k");
+});
+
+test("personal streaming pins the Cloudflare endpoint and authenticates warmup and connect with Bearer", async (t) => {
+  const original = process.env.LOCAL_FLOW;
+  process.env.LOCAL_FLOW = "1";
+  t.after(() =>
+    original === undefined ? delete process.env.LOCAL_FLOW : (process.env.LOCAL_FLOW = original)
+  );
+  const { fetchRealtimeTokenForProvider } = require("../../src/helpers/realtimeTokenProviders");
+  assert.deepEqual(
+    await fetchRealtimeTokenForProvider(
+      "deepgram-realtime",
+      {
+        environmentManager: {
+          getCustomTranscriptionKey: () => "backend-token",
+          getDeepgramKey: () => {
+            throw new Error("must not use direct key");
+          },
+        },
+      },
+      { mode: "byok" },
+      { streams: 2 }
+    ),
+    ["backend-token", "backend-token"]
+  );
+  const streaming = new DeepgramStreaming();
+  const url = new URL(
+    streaming.buildWebSocketUrl({ mode: "byok", language: "multi", token: "private" })
+  );
+  assert.equal(url.host, "local-flow-personal.sathuashrith.workers.dev");
+  assert.equal(url.pathname, "/v1/listen");
+  assert.equal(url.searchParams.get("model"), "nova-3");
+  assert.equal(url.searchParams.get("mip_opt_out"), "true");
+  assert.ok(!url.href.includes("private"));
+  await withMetadataServer(async (endpoint, connections, headers) => {
+    streaming.buildWebSocketUrl = () => endpoint;
+    try {
+      await streaming.warmup({ mode: "byok", token: "backend-token" });
+      await streaming.connect({ mode: "byok", token: "backend-token" });
+      assert.equal(streaming.mode, "cloudflare");
+      assert.ok(headers.length >= 1);
+      assert.ok(headers.every((header) => header === "Bearer backend-token"));
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("personal cold connection becomes ready without speech or a server message", async (t) => {
+  const original = process.env.LOCAL_FLOW;
+  process.env.LOCAL_FLOW = "1";
+  t.after(() =>
+    original === undefined ? delete process.env.LOCAL_FLOW : (process.env.LOCAL_FLOW = original)
+  );
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  await new Promise((resolve) => server.once("listening", resolve));
+  const streaming = new DeepgramStreaming();
+  streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+  try {
+    await streaming.connect({ mode: "byok", token: "backend-token" });
+    assert.equal(streaming.isConnected, true);
+    assert.equal(streaming.pendingResolve, null);
+  } finally {
+    streaming.cleanupAll();
+    await new Promise((resolve) => server.close(resolve));
+  }
 });

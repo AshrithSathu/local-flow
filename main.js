@@ -80,9 +80,16 @@ function resolveAppChannel() {
 }
 
 const APP_CHANNEL = resolveAppChannel();
+const IS_LOCAL_FLOW =
+  require("./package.json").productName === "Local Flow" || process.env.LOCAL_FLOW === "1";
 process.env.OPENWHISPR_CHANNEL = APP_CHANNEL;
+if (IS_LOCAL_FLOW) process.env.LOCAL_FLOW = "1";
 
 function configureChannelUserDataPath() {
+  if (IS_LOCAL_FLOW) {
+    app.setPath("userData", path.join(app.getPath("appData"), "Local Flow"));
+    return;
+  }
   if (APP_CHANNEL === "production") {
     return;
   }
@@ -136,6 +143,7 @@ if (process.platform === "win32") {
 }
 
 function getOAuthProtocol() {
+  if (IS_LOCAL_FLOW) return "local-flow";
   const fromEnv = (process.env.VITE_OPENWHISPR_PROTOCOL || process.env.OPENWHISPR_PROTOCOL || "")
     .trim()
     .toLowerCase();
@@ -244,7 +252,9 @@ if (!gotSingleInstanceLock) {
 const isLiveWindow = (window) => window && !window.isDestroyed();
 
 // Ensure macOS menus use the proper casing for the app name
-if (process.platform === "darwin" && app.getName() !== "OpenWhispr") {
+if (IS_LOCAL_FLOW) {
+  app.setName("Local Flow");
+} else if (process.platform === "darwin" && app.getName() !== "OpenWhispr") {
   app.setName("OpenWhispr");
 }
 
@@ -997,13 +1007,15 @@ async function startApp() {
   // failure before the whisper pre-warm below resolves its GPU backend.
   resetWhisperGpuFailureOnUpgrade(environmentManager);
   registerSidecars();
-  startAuthBridgeServer();
+  if (!IS_LOCAL_FLOW) {
+    startAuthBridgeServer();
 
-  cliBridge = new CliBridge(ipcHandlers);
-  cliBridge.start().catch((err) => {
-    debugLogger.error("CLI bridge failed to start", { error: err.message });
-    cliBridge = null;
-  });
+    cliBridge = new CliBridge(ipcHandlers);
+    cliBridge.start().catch((err) => {
+      debugLogger.error("CLI bridge failed to start", { error: err.message });
+      cliBridge = null;
+    });
+  }
 
   await migrateCookieToBearerToken();
 
@@ -1240,23 +1252,25 @@ async function startApp() {
     localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
     whisperModel: process.env.LOCAL_WHISPER_MODEL,
   };
-  whisperManager.initializeAtStartup(whisperSettings).catch((err) => {
-    debugLogger.debug("Whisper startup init error (non-fatal)", { error: err.message });
-  });
+  if (!IS_LOCAL_FLOW)
+    whisperManager.initializeAtStartup(whisperSettings).catch((err) => {
+      debugLogger.debug("Whisper startup init error (non-fatal)", { error: err.message });
+    });
 
   const parakeetSettings = {
     localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
     parakeetModel: process.env.PARAKEET_MODEL,
     language: process.env.DICTATION_LANGUAGE,
   };
-  parakeetManager.initializeAtStartup(parakeetSettings).catch((err) => {
-    debugLogger.debug("Parakeet startup init error (non-fatal)", { error: err.message });
-  });
+  if (!IS_LOCAL_FLOW)
+    parakeetManager.initializeAtStartup(parakeetSettings).catch((err) => {
+      debugLogger.debug("Parakeet startup init error (non-fatal)", { error: err.message });
+    });
 
   // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.
   const cleanupProvider = process.env.CLEANUP_PROVIDER || process.env.REASONING_PROVIDER;
   const cleanupLocalModel = process.env.LOCAL_CLEANUP_MODEL || process.env.LOCAL_REASONING_MODEL;
-  if (cleanupProvider === "local" && cleanupLocalModel) {
+  if (!IS_LOCAL_FLOW && cleanupProvider === "local" && cleanupLocalModel) {
     const modelManager = require("./src/helpers/modelManagerBridge").default;
     modelManager.prewarmServer(cleanupLocalModel).catch((err) => {
       debugLogger.debug("llama-server pre-warm error (non-fatal)", { error: err.message });
@@ -1264,6 +1278,7 @@ async function startApp() {
   }
 
   if (
+    !IS_LOCAL_FLOW &&
     process.env.DICTATION_AGENT_PROVIDER === "local" &&
     process.env.LOCAL_DICTATION_AGENT_MODEL &&
     process.env.LOCAL_DICTATION_AGENT_MODEL !== cleanupLocalModel
@@ -1278,6 +1293,7 @@ async function startApp() {
 
   // Auto-download diarization models if binary is available
   if (
+    !IS_LOCAL_FLOW &&
     diarizationManager.getBinaryPath() &&
     (!diarizationManager.isModelDownloaded() || !diarizationManager.isVadModelDownloaded())
   ) {
@@ -1309,7 +1325,7 @@ async function startApp() {
   // A successful unhealthy-restart can bring the sidecar back on a new port.
   qdrantManager.on("restarted", wireVectorIndex);
   sidecarRegistry.register("qdrant", () => qdrantManager.stop());
-  if (qdrantManager.isAvailable()) {
+  if (!IS_LOCAL_FLOW && qdrantManager.isAvailable()) {
     qdrantManager
       .start()
       .then(() => {
@@ -1321,7 +1337,7 @@ async function startApp() {
   }
 
   const localEmbeddings = require("./src/helpers/localEmbeddings");
-  if (!localEmbeddings.isAvailable()) {
+  if (!IS_LOCAL_FLOW && !localEmbeddings.isAvailable()) {
     localEmbeddings.downloadModel().catch((err) => {
       debugLogger.debug("Embedding model download error (non-fatal)", { error: err.message });
     });

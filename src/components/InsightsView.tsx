@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Loader2, Mic2, Trophy } from "./icons";
 import { useTranslation } from "react-i18next";
@@ -439,9 +440,11 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
             <TabsTrigger value="usage" className="h-6 px-2.5 text-xs rounded-[5px]">
               {t("insights.yourUsage")}
             </TabsTrigger>
-            <TabsTrigger value="leaderboard" className="h-6 px-2.5 text-xs rounded-[5px]">
-              {t("insights.leaderboard.title")}
-            </TabsTrigger>
+            {!IS_LOCAL_FLOW && (
+              <TabsTrigger value="leaderboard" className="h-6 px-2.5 text-xs rounded-[5px]">
+                {t("insights.leaderboard.title")}
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {activeTab === "usage" ? (

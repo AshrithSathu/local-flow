@@ -1,6 +1,7 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
 
+const localFlowProfile = require("../config/localFlow.json");
 const SAMPLE_RATE = 16000;
 const WEBSOCKET_TIMEOUT_MS = 30000;
 const TERMINATION_TIMEOUT_MS = 5000;
@@ -138,7 +139,9 @@ class DeepgramStreaming {
     const sampleRate = options.sampleRate || SAMPLE_RATE;
     const lang = options.language && options.language !== "auto" ? options.language : null;
     const baseLang = lang ? lang.split("-")[0].toLowerCase() : null;
-    const useNova3 = !lang || NOVA3_LANGUAGES.has(lang) || NOVA3_LANGUAGES.has(baseLang);
+    const cloudflare = process.env.LOCAL_FLOW === "1" && options.mode === "byok";
+    const useNova3 =
+      cloudflare || !lang || NOVA3_LANGUAGES.has(lang) || NOVA3_LANGUAGES.has(baseLang);
     // options.model is intentionally ignored: the registry only offers nova-3,
     // and honouring a user-pinned family would defeat the nova-2 downgrade that
     // keeps languages outside NOVA3_LANGUAGES working.
@@ -156,6 +159,7 @@ class DeepgramStreaming {
       model,
       punctuate: "true",
       interim_results: "true",
+      mip_opt_out: "true",
     });
     if (lang) {
       params.set("language", lang);
@@ -167,7 +171,10 @@ class DeepgramStreaming {
         if (term) params.append(paramName, term);
       }
     }
-    return `wss://api.deepgram.com/v1/listen?${params.toString()}`;
+    const endpoint = cloudflare
+      ? `${localFlowProfile.cloudTranscriptionBaseUrl.replace("https:", "wss:")}/listen`
+      : "wss://api.deepgram.com/v1/listen";
+    return `${endpoint}?${params.toString()}`;
   }
 
   cacheToken(token) {
@@ -180,7 +187,12 @@ class DeepgramStreaming {
   // socket minted under one credential kind must never serve the other. Callers
   // that read the cache before connecting must adopt the mode first.
   adoptMode(options) {
-    const mode = options.mode === "byok" ? "byok" : "openwhispr";
+    const mode =
+      options.mode === "byok"
+        ? process.env.LOCAL_FLOW === "1"
+          ? "cloudflare"
+          : "byok"
+        : "openwhispr";
     if (this.mode !== null && this.mode !== mode) {
       debugLogger.debug("Deepgram credential mode changed, dropping cached session state", {
         from: this.mode,
@@ -667,6 +679,17 @@ class DeepgramStreaming {
 
       this.ws.on("open", () => {
         debugLogger.debug("Deepgram WebSocket connected");
+        // Cloudflare Nova may send no messages until speech arrives. The 101
+        // handshake is readiness, otherwise a quiet cold start times out.
+        if (this.mode === "cloudflare" && this.pendingResolve) {
+          this.isConnected = true;
+          this.sessionStartedAt = Date.now();
+          clearTimeout(this.connectionTimeout);
+          this.startKeepAlive(this.ws);
+          this.pendingResolve();
+          this.pendingResolve = null;
+          this.pendingReject = null;
+        }
       });
 
       this.ws.on("message", (data) => {

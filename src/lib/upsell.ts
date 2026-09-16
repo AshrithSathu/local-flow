@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 export type UpsellDecision = "show" | "hide" | "unknown";
 
 export interface UpsellInput {
@@ -14,6 +15,7 @@ export function decideUpsell({
   hasPaidAccess,
   isPastDue,
 }: UpsellInput): UpsellDecision {
+  if (IS_LOCAL_FLOW) return "hide";
   if (!authLoaded) return "unknown";
   // Signed out there is no usage response to await; the upsell is the point.
   if (!isSignedIn) return "show";

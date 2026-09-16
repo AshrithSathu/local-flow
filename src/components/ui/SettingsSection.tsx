@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../../config/localFlow";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsLayout } from "./useSettingsLayout";
@@ -151,68 +152,76 @@ export function InferenceModeSelector({
 
   return (
     <SettingsPanel className="overflow-hidden">
-      {modes.map((mode) => {
-        const isActive = activeMode === mode.id;
-        const isDisabled = !!mode.disabled;
-        return (
-          <SettingsPanelRow
-            key={mode.id}
-            className={`transition-colors ${
-              isDisabled ? "" : "hover:bg-foreground/3 dark:hover:bg-white/3"
-            }`}
-          >
-            <button
-              onClick={() => onSelect(mode.id)}
-              className={`w-full flex items-center gap-3 text-start cursor-pointer group ${
-                isDisabled ? "opacity-60" : ""
+      {modes
+        .filter((mode) => !IS_LOCAL_FLOW || mode.id === "providers")
+        .map((mode) => {
+          const isActive = activeMode === mode.id;
+          const isDisabled = !!mode.disabled;
+          return (
+            <SettingsPanelRow
+              key={mode.id}
+              className={`transition-colors ${
+                isDisabled ? "" : "hover:bg-foreground/3 dark:hover:bg-white/3"
               }`}
             >
-              <div
-                className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-colors ${
-                  isActive
-                    ? "bg-primary/10 dark:bg-primary/15"
-                    : "bg-muted/60 dark:bg-surface-raised group-hover:bg-muted dark:group-hover:bg-surface-3"
+              <button
+                onClick={() => onSelect(mode.id)}
+                className={`w-full flex items-center gap-3 text-start cursor-pointer group ${
+                  isDisabled ? "opacity-60" : ""
                 }`}
               >
                 <div
-                  className={`transition-colors ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                  className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                    isActive
+                      ? "bg-primary/10 dark:bg-primary/15"
+                      : "bg-muted/60 dark:bg-surface-raised group-hover:bg-muted dark:group-hover:bg-surface-3"
+                  }`}
                 >
-                  {mode.icon}
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-foreground">{mode.label}</span>
-                  {isActive && !isDisabled && (
-                    <span className="text-xs font-medium text-primary bg-primary/10 dark:bg-primary/15 px-1.5 py-px rounded-sm">
-                      {t("common.active")}
-                    </span>
-                  )}
-                  {isDisabled && mode.badge && (
-                    <span className="text-xs font-medium text-muted-foreground bg-muted/80 dark:bg-surface-3 px-1.5 py-px rounded-sm">
-                      {mode.badge}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground/80 mt-0.5">{mode.description}</p>
-              </div>
-              <div
-                className={`w-4 h-4 rounded-full border-2 shrink-0 transition-colors ${
-                  isActive
-                    ? "border-primary bg-primary"
-                    : "border-border-hover dark:border-border-subtle"
-                }`}
-              >
-                {isActive && (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
+                  <div
+                    className={`transition-colors ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                  >
+                    {mode.icon}
                   </div>
-                )}
-              </div>
-            </button>
-          </SettingsPanelRow>
-        );
-      })}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-foreground">
+                      {IS_LOCAL_FLOW && mode.id === "providers" ? "Cloudflare" : mode.label}
+                    </span>
+                    {isActive && !isDisabled && (
+                      <span className="text-xs font-medium text-primary bg-primary/10 dark:bg-primary/15 px-1.5 py-px rounded-sm">
+                        {t("common.active")}
+                      </span>
+                    )}
+                    {isDisabled && mode.badge && (
+                      <span className="text-xs font-medium text-muted-foreground bg-muted/80 dark:bg-surface-3 px-1.5 py-px rounded-sm">
+                        {mode.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground/80 mt-0.5">
+                    {IS_LOCAL_FLOW && mode.id === "providers"
+                      ? "Remote inference through your secured personal backend."
+                      : mode.description}
+                  </p>
+                </div>
+                <div
+                  className={`w-4 h-4 rounded-full border-2 shrink-0 transition-colors ${
+                    isActive
+                      ? "border-primary bg-primary"
+                      : "border-border-hover dark:border-border-subtle"
+                  }`}
+                >
+                  {isActive && (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
+                    </div>
+                  )}
+                </div>
+              </button>
+            </SettingsPanelRow>
+          );
+        })}
     </SettingsPanel>
   );
 }

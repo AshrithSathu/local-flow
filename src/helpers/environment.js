@@ -103,6 +103,17 @@ class EnvironmentManager {
       await this._migrateToSecureStorage();
     }
     await this._loadAllSecrets();
+    // Personal build bootstrap: immediately encrypt the generated backend token.
+    if (app.getName() === "Local Flow" && process.env.LOCAL_FLOW_ACCESS_TOKEN) {
+      if (!this._encryptionAvailable())
+        throw new Error("Secure credential storage is required for Local Flow");
+      await this._saveSecretKey(
+        "CUSTOM_TRANSCRIPTION_API_KEY",
+        process.env.LOCAL_FLOW_ACCESS_TOKEN
+      );
+      await this._saveSecretKey("CUSTOM_CLEANUP_API_KEY", process.env.LOCAL_FLOW_ACCESS_TOKEN);
+      delete process.env.LOCAL_FLOW_ACCESS_TOKEN;
+    }
   }
 
   _getMigrationSentinelPath() {

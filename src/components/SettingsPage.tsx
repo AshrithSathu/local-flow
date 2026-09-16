@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -1055,10 +1056,12 @@ function LlmsTabs({
   renderChatIntelligence: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
-  const agentAllowed = usePolicyStore(isAgentAllowed);
-  const visibleTabIds = agentAllowed
-    ? LLM_TABS
-    : LLM_TABS.filter((tabId) => !AGENT_LLM_TABS.has(tabId));
+  const agentAllowed = usePolicyStore(isAgentAllowed) && !IS_LOCAL_FLOW;
+  const visibleTabIds: LlmTab[] = IS_LOCAL_FLOW
+    ? ["dictationCleanup"]
+    : agentAllowed
+      ? LLM_TABS
+      : LLM_TABS.filter((tabId) => !AGENT_LLM_TABS.has(tabId));
   const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", visibleTabIds, initialTab);
 
   const subTabs = [
@@ -1072,8 +1075,12 @@ function LlmsTabs({
   return (
     <div className="space-y-4">
       <SectionHeader
-        title={t("settingsPage.llms.title")}
-        description={t("settingsPage.llms.description")}
+        title={IS_LOCAL_FLOW ? "Text cleanup" : t("settingsPage.llms.title")}
+        description={
+          IS_LOCAL_FLOW
+            ? "Optional cleanup runs on Cloudflare. Turn it off to keep the raw transcript."
+            : t("settingsPage.llms.description")
+        }
       />
       <ProviderTabs
         providers={subTabs}
@@ -1091,8 +1098,12 @@ function LlmsTabs({
       {agentAllowed && (
         <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
       )}
-      <TabPanel active={tab === "dictationTranslation"}>{renderDictationTranslation()}</TabPanel>
-      <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
+      {!IS_LOCAL_FLOW && (
+        <TabPanel active={tab === "dictationTranslation"}>{renderDictationTranslation()}</TabPanel>
+      )}
+      {!IS_LOCAL_FLOW && (
+        <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
+      )}
       {agentAllowed && (
         <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
       )}
@@ -1297,7 +1308,7 @@ export default function SettingsPage({
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
 
   const settingsPolicyState = usePolicySnapshot();
-  const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
+  const agentAllowedByPolicy = !IS_LOCAL_FLOW && isAgentAllowed(settingsPolicyState);
   const historyLockedByPolicy = lockedLocalHistoryValue(settingsPolicyState) !== null;
   const effectiveDataRetentionEnabled = effectiveLocalHistoryEnabled(
     settingsPolicyState,
@@ -3150,20 +3161,22 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.general.notifications.calendarReminders")}
-                    description={t(
-                      "settingsPage.general.notifications.calendarRemindersDescription"
-                    )}
-                  >
-                    <Toggle
-                      checked={notifyCalendarReminders}
-                      onChange={setNotifyCalendarReminders}
-                      disabled={!notificationsEnabled}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
+                {!IS_LOCAL_FLOW && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.notifications.calendarReminders")}
+                      description={t(
+                        "settingsPage.general.notifications.calendarRemindersDescription"
+                      )}
+                    >
+                      <Toggle
+                        checked={notifyCalendarReminders}
+                        onChange={setNotifyCalendarReminders}
+                        disabled={!notificationsEnabled}
+                      />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 
@@ -4065,24 +4078,26 @@ EOF`,
             )}
 
             {/* Translation Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("settingsPage.general.translationHotkey.title")}
-                description={t("settingsPage.general.translationHotkey.description")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyListInput
-                    value={translationKey}
-                    onChange={(list) => commitAgentHotkey(setTranslationKey, list)}
-                    onClear={() => commitAgentHotkey(setTranslationKey, "")}
-                    validate={validateTranslationHotkey}
-                    disabled={isAgentHotkeyCommitting}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                  />
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
+            {!IS_LOCAL_FLOW && (
+              <div>
+                <SectionHeader
+                  title={t("settingsPage.general.translationHotkey.title")}
+                  description={t("settingsPage.general.translationHotkey.description")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <HotkeyListInput
+                      value={translationKey}
+                      onChange={(list) => commitAgentHotkey(setTranslationKey, list)}
+                      onClear={() => commitAgentHotkey(setTranslationKey, "")}
+                      validate={validateTranslationHotkey}
+                      disabled={isAgentHotkeyCommitting}
+                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    />
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
 
             {/* Meeting Mode Hotkey */}
             <div>
@@ -4156,181 +4171,183 @@ EOF`,
         return (
           <div className="space-y-6">
             {/* Privacy */}
-            <div>
-              <SectionHeader
-                title={t("settingsPage.privacy.title")}
-                description={t("settingsPage.privacy.description")}
-              />
+            {!IS_LOCAL_FLOW && (
+              <div>
+                <SectionHeader
+                  title={t("settingsPage.privacy.title")}
+                  description={t("settingsPage.privacy.description")}
+                />
 
-              {isSignedIn && (
-                <div className="mb-4">
-                  <SettingsPanel className="mb-2">
-                    <SettingsPanelRow>
-                      <SettingsRow
-                        label={t("settingsPage.privacy.cloudBackup")}
-                        description={
-                          cloudBackupPolicyAllowed
-                            ? t("settingsPage.privacy.cloudBackupDescription")
-                            : t("common.managedByOrg")
-                        }
-                      >
-                        <Toggle
-                          checked={cloudBackupEnabled}
-                          disabled={
-                            !canChangeCloudBackupPreference(
-                              cloudBackupPolicyAllowed,
-                              cloudBackupEnabled
-                            )
+                {isSignedIn && (
+                  <div className="mb-4">
+                    <SettingsPanel className="mb-2">
+                      <SettingsPanelRow>
+                        <SettingsRow
+                          label={t("settingsPage.privacy.cloudBackup")}
+                          description={
+                            cloudBackupPolicyAllowed
+                              ? t("settingsPage.privacy.cloudBackupDescription")
+                              : t("common.managedByOrg")
                           }
-                          onChange={(v) => {
-                            setCloudBackupEnabled(v);
-                            if (v) {
-                              startMigration().catch(console.error);
-                              syncService.requestSyncAll("manual");
+                        >
+                          <Toggle
+                            checked={cloudBackupEnabled}
+                            disabled={
+                              !canChangeCloudBackupPreference(
+                                cloudBackupPolicyAllowed,
+                                cloudBackupEnabled
+                              )
                             }
-                          }}
-                        />
-                      </SettingsRow>
-                    </SettingsPanelRow>
-                  </SettingsPanel>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t("settingsPage.privacy.cloudBackupTeamCaveat")}
-                  </p>
-                  {migration && (
-                    <div className="mt-2 space-y-1">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1.5">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          {t("settingsPage.privacy.cloudNotesMigration", {
-                            done: migration.done,
-                            total: migration.total,
-                          })}
-                        </span>
-                        <span>{Math.round((migration.done / migration.total) * 100)}%</span>
-                      </div>
-                      <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full bg-primary transition-all duration-300 ease-out"
-                          style={{ width: `${(migration.done / migration.total) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {!migration && cloudBackupEnabled && isSignedIn && (
+                            onChange={(v) => {
+                              setCloudBackupEnabled(v);
+                              if (v) {
+                                startMigration().catch(console.error);
+                                syncService.requestSyncAll("manual");
+                              }
+                            }}
+                          />
+                        </SettingsRow>
+                      </SettingsPanelRow>
+                    </SettingsPanel>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {t("settingsPage.privacy.cloudNotesMigrationDone")}
+                      {t("settingsPage.privacy.cloudBackupTeamCaveat")}
                     </p>
-                  )}
-                  {cloudBackupEnabled &&
-                    isSignedIn &&
-                    (() => {
-                      const lastSyncedAt = localStorage.getItem("lastSyncedAt");
-                      if (!lastSyncedAt) return null;
-                      const date = new Date(lastSyncedAt);
-                      const now = new Date();
-                      const diffMs = now.getTime() - date.getTime();
-                      const diffMin = Math.floor(diffMs / 60000);
-                      const diffHr = Math.floor(diffMs / 3600000);
-                      let relative: string;
-                      if (diffMin < 1) relative = t("settingsPage.privacy.justNow");
-                      else if (diffMin < 60)
-                        relative = t("settingsPage.privacy.minutesAgo", { count: diffMin });
-                      else if (diffHr < 24)
-                        relative = t("settingsPage.privacy.hoursAgo", { count: diffHr });
-                      else
-                        relative = date.toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        });
-                      return (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {t("settingsPage.privacy.lastSynced", { time: relative })}
-                        </p>
-                      );
-                    })()}
-                </div>
-              )}
+                    {migration && (
+                      <div className="mt-2 space-y-1">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {t("settingsPage.privacy.cloudNotesMigration", {
+                              done: migration.done,
+                              total: migration.total,
+                            })}
+                          </span>
+                          <span>{Math.round((migration.done / migration.total) * 100)}%</span>
+                        </div>
+                        <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all duration-300 ease-out"
+                            style={{ width: `${(migration.done / migration.total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {!migration && cloudBackupEnabled && isSignedIn && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t("settingsPage.privacy.cloudNotesMigrationDone")}
+                      </p>
+                    )}
+                    {cloudBackupEnabled &&
+                      isSignedIn &&
+                      (() => {
+                        const lastSyncedAt = localStorage.getItem("lastSyncedAt");
+                        if (!lastSyncedAt) return null;
+                        const date = new Date(lastSyncedAt);
+                        const now = new Date();
+                        const diffMs = now.getTime() - date.getTime();
+                        const diffMin = Math.floor(diffMs / 60000);
+                        const diffHr = Math.floor(diffMs / 3600000);
+                        let relative: string;
+                        if (diffMin < 1) relative = t("settingsPage.privacy.justNow");
+                        else if (diffMin < 60)
+                          relative = t("settingsPage.privacy.minutesAgo", { count: diffMin });
+                        else if (diffHr < 24)
+                          relative = t("settingsPage.privacy.hoursAgo", { count: diffHr });
+                        else
+                          relative = date.toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
+                        return (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t("settingsPage.privacy.lastSynced", { time: relative })}
+                          </p>
+                        );
+                      })()}
+                  </div>
+                )}
 
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.privacy.insightsSync")}
-                    description={
-                      !isSignedIn
-                        ? t("settingsPage.privacy.insightsSyncRequiresAccount")
-                        : !insightsSyncAllowedByPolicy
-                          ? t("common.managedByOrg")
-                          : effectiveDataRetentionEnabled
-                            ? t("settingsPage.privacy.insightsSyncDescription")
-                            : t("settingsPage.privacy.insightsSyncRequiresHistory")
-                    }
-                  >
-                    {/* With history off nothing is counted anywhere: this
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.privacy.insightsSync")}
+                      description={
+                        !isSignedIn
+                          ? t("settingsPage.privacy.insightsSyncRequiresAccount")
+                          : !insightsSyncAllowedByPolicy
+                            ? t("common.managedByOrg")
+                            : effectiveDataRetentionEnabled
+                              ? t("settingsPage.privacy.insightsSyncDescription")
+                              : t("settingsPage.privacy.insightsSyncRequiresHistory")
+                      }
+                    >
+                      {/* With history off nothing is counted anywhere: this
                         device records no counter, and the cloud writes none
                         either, because analyticsSyncEnabled withholds the
                         localDate its analytics write requires. Turning this on
                         could therefore only promise a sync that never happens —
                         but an already-on toggle must stay switchable off. */}
-                    <Toggle
-                      checked={insightsSyncEnabled}
-                      disabled={
-                        !isSignedIn ||
-                        !canToggleInsightsSync ||
-                        (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
+                      <Toggle
+                        checked={insightsSyncEnabled}
+                        disabled={
+                          !isSignedIn ||
+                          !canToggleInsightsSync ||
+                          (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
+                        }
+                        onChange={(enabled) => {
+                          if (enabled) void enableInsightsSync();
+                          else disableInsightsSync();
+                        }}
+                      />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("insights.leaderboard.title")}
+                      description={
+                        !isSignedIn
+                          ? t("settingsPage.privacy.leaderboardRequiresAccount")
+                          : leaderboardParticipationError === "read"
+                            ? t("insights.leaderboard.activationError")
+                            : leaderboardLeavePending
+                              ? t("insights.leaderboard.leavePending")
+                              : !insightsSyncAllowedByPolicy
+                                ? t("common.managedByOrg")
+                                : !effectiveDataRetentionEnabled
+                                  ? t("settingsPage.privacy.leaderboardRequiresHistory")
+                                  : t("settingsPage.privacy.leaderboardDescription")
                       }
-                      onChange={(enabled) => {
-                        if (enabled) void enableInsightsSync();
-                        else disableInsightsSync();
-                      }}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("insights.leaderboard.title")}
-                    description={
-                      !isSignedIn
-                        ? t("settingsPage.privacy.leaderboardRequiresAccount")
-                        : leaderboardParticipationError === "read"
-                          ? t("insights.leaderboard.activationError")
-                          : leaderboardLeavePending
-                            ? t("insights.leaderboard.leavePending")
-                            : !insightsSyncAllowedByPolicy
-                              ? t("common.managedByOrg")
-                              : !effectiveDataRetentionEnabled
-                                ? t("settingsPage.privacy.leaderboardRequiresHistory")
-                                : t("settingsPage.privacy.leaderboardDescription")
-                    }
-                  >
-                    <Toggle
-                      checked={isSignedIn && leaderboardParticipationEnabled}
-                      disabled={
-                        !isSignedIn ||
-                        !leaderboardParticipationReady ||
-                        leaderboardPreferencePending ||
-                        leaderboardParticipationUpdating ||
-                        leaderboardParticipationError === "read" ||
-                        (!leaderboardParticipationEnabled &&
-                          (!effectiveDataRetentionEnabled ||
-                            !insightsSyncAllowedByPolicy ||
-                            (!insightsSyncEnabled && !canToggleInsightsSync)))
-                      }
-                      onChange={(enabled) => void updateLeaderboardParticipation(enabled)}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.privacy.usageAnalytics")}
-                    description={t("settingsPage.privacy.usageAnalyticsDescription")}
-                  >
-                    <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
-                  </SettingsRow>
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
+                    >
+                      <Toggle
+                        checked={isSignedIn && leaderboardParticipationEnabled}
+                        disabled={
+                          !isSignedIn ||
+                          !leaderboardParticipationReady ||
+                          leaderboardPreferencePending ||
+                          leaderboardParticipationUpdating ||
+                          leaderboardParticipationError === "read" ||
+                          (!leaderboardParticipationEnabled &&
+                            (!effectiveDataRetentionEnabled ||
+                              !insightsSyncAllowedByPolicy ||
+                              (!insightsSyncEnabled && !canToggleInsightsSync)))
+                        }
+                        onChange={(enabled) => void updateLeaderboardParticipation(enabled)}
+                      />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.privacy.usageAnalytics")}
+                      description={t("settingsPage.privacy.usageAnalyticsDescription")}
+                    >
+                      <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
 
             {/* Audio Retention */}
             <div className="border-t border-border/70 pt-6">
@@ -4989,24 +5006,36 @@ EOF`,
               activeSection === "llms" ? (initialSubTab as LlmTab | undefined) : undefined
             }
             renderChatIntelligence={() => <ChatAgentSettings />}
-            renderDictationCleanup={() => (
-              <div className="space-y-6">
-                <AiModelsSection
-                  useCleanupModel={useCleanupModel}
-                  setUseCleanupModel={(value) => {
-                    updateCleanupSettings({ useCleanupModel: value });
-                  }}
-                  toast={toast}
-                />
-                <div className="border-t border-border/70 pt-6">
-                  <SectionHeader
-                    title={t("settingsPage.prompts.title")}
-                    description={t("settingsPage.prompts.description")}
+            renderDictationCleanup={() =>
+              IS_LOCAL_FLOW ? (
+                <SettingsRow
+                  label="Clean up dictated text"
+                  description="Already formatted text is delivered immediately. Cloudflare tidies punctuation and filler words when needed."
+                >
+                  <Toggle
+                    checked={useCleanupModel}
+                    onChange={(value) => updateCleanupSettings({ useCleanupModel: value })}
                   />
-                  <PromptStudio />
+                </SettingsRow>
+              ) : (
+                <div className="space-y-6">
+                  <AiModelsSection
+                    useCleanupModel={useCleanupModel}
+                    setUseCleanupModel={(value) => {
+                      updateCleanupSettings({ useCleanupModel: value });
+                    }}
+                    toast={toast}
+                  />
+                  <div className="border-t border-border/70 pt-6">
+                    <SectionHeader
+                      title={t("settingsPage.prompts.title")}
+                      description={t("settingsPage.prompts.description")}
+                    />
+                    <PromptStudio />
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            }
             renderDictationAgent={() => <DictationAgentSettings />}
             renderDictationTranslation={() => <DictationTranslationSettings />}
             renderNoteFormatting={() => <NoteFormattingSettings />}

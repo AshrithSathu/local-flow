@@ -20,6 +20,11 @@ import {
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { openCodeSessionHeaders } from "../openCodeSession";
+import {
+  cleanupBudgetMs,
+  isTechnicalTranscript,
+  isAlreadyCleanTranscript,
+} from "../../../helpers/localFlowCleanupPolicy";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
@@ -142,6 +147,9 @@ export const openaiProvider: InferenceProvider = {
     const resolvedProvider = config.provider || getSettings().cleanupProvider || "";
     const isCustomProvider = resolvedProvider === "custom";
     const isOpenRouter = resolvedProvider === "openrouter";
+    const isLocalFlowCleanup = isCustomProvider && model === "local-flow-cleanup";
+    if (isLocalFlowCleanup && (isTechnicalTranscript(text) || isAlreadyCleanTranscript(text)))
+      return text;
 
     logger.logReasoning("OPENAI_START", {
       model,
@@ -195,7 +203,7 @@ export const openaiProvider: InferenceProvider = {
     const dialect = detectEndpointDialect(openAiBase);
     // OpenRouter and known dialect hosts speak Chat Completions only — no /responses probe needed.
     let endpointCandidates: Array<{ url: string; type: "responses" | "chat" }>;
-    if (isOpenRouter || dialect) {
+    if (isLocalFlowCleanup || isOpenRouter || dialect) {
       endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
     } else {
       await detectServerType(openAiBase);
@@ -223,14 +231,18 @@ export const openaiProvider: InferenceProvider = {
       });
     }
 
-    const retryStrategy = createApiRetryStrategy();
+    const retryStrategy = isLocalFlowCleanup
+      ? { shouldRetry: () => false }
+      : createApiRetryStrategy();
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
       let lastRetryableError: Error | null = null;
 
       for (const { url: endpoint, type } of endpointCandidates) {
         const controller = new AbortController();
-        const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
+        const timeoutSeconds = isLocalFlowCleanup
+          ? (cleanupBudgetMs(text.length) + 500) / 1000
+          : getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
         try {
           const requestedMaxTokens =

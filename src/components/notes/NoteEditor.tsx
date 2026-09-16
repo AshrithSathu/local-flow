@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../../config/localFlow";
 import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
@@ -1083,25 +1084,40 @@ export default function NoteEditor({
                   onStop={onStopRecording}
                 />
               )}
-              <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px]")}>
-                <button
-                  type="button"
-                  onClick={() => openShare("open")}
-                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "gap-1.5 ps-2.5 pe-3")}
-                >
-                  <Lock size={13} className={isShared ? "text-primary" : "text-foreground/60"} />
-                  {t("noteEditor.share.button")}
-                </button>
-                <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
-                <button
-                  type="button"
-                  onClick={() => openShare("copy-link")}
-                  aria-label={t("noteEditor.share.dialog.copyLink")}
-                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
-                >
-                  <Link2 size={13} className="text-foreground/60" />
-                </button>
-              </div>
+              {IS_LOCAL_FLOW ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className={NOTE_META_CHIP_CLASS}>Export</button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {exportOptions.map((option) => (
+                      <DropdownMenuItem key={option.id} onClick={option.onSelect}>
+                        {option.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px]")}>
+                  <button
+                    type="button"
+                    onClick={() => openShare("open")}
+                    className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "gap-1.5 ps-2.5 pe-3")}
+                  >
+                    <Lock size={13} className={isShared ? "text-primary" : "text-foreground/60"} />
+                    {t("noteEditor.share.button")}
+                  </button>
+                  <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
+                  <button
+                    type="button"
+                    onClick={() => openShare("copy-link")}
+                    aria-label={t("noteEditor.share.dialog.copyLink")}
+                    className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
+                  >
+                    <Link2 size={13} className="text-foreground/60" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1238,22 +1254,24 @@ export default function NoteEditor({
               />
             </div>
           )}
-          <NoteBottomBar
-            isRecording={isRecording}
-            onAskSubmit={handleAskSubmit}
-            onInputFocus={handleChatInputFocus}
-            actionPicker={isRecording || !canEditNote ? undefined : actionPicker}
-            callout={
-              showSummaryCallout && (
-                <Button className="h-9 gap-2 px-4 text-sm" onClick={onGenerateSummary}>
-                  <AlignLeft size={16} />
-                  {t("notes.editor.generateSummary")}
-                </Button>
-              )
-            }
-            hideInput={chatMode !== "hidden"}
-          />
-          {chatMode === "floating" && (
+          {!IS_LOCAL_FLOW && (
+            <NoteBottomBar
+              isRecording={isRecording}
+              onAskSubmit={handleAskSubmit}
+              onInputFocus={handleChatInputFocus}
+              actionPicker={isRecording || !canEditNote ? undefined : actionPicker}
+              callout={
+                showSummaryCallout && (
+                  <Button className="h-9 gap-2 px-4 text-sm" onClick={onGenerateSummary}>
+                    <AlignLeft size={16} />
+                    {t("notes.editor.generateSummary")}
+                  </Button>
+                )
+              }
+              hideInput={chatMode !== "hidden"}
+            />
+          )}
+          {!IS_LOCAL_FLOW && chatMode === "floating" && (
             <EmbeddedChat
               mode="floating"
               floatingPanelRef={floatingChatPanelRef}
@@ -1270,7 +1288,7 @@ export default function NoteEditor({
           )}
         </div>
       </div>
-      {chatMode === "sidebar" && (
+      {!IS_LOCAL_FLOW && chatMode === "sidebar" && (
         <EmbeddedChat
           mode="sidebar"
           onModeChange={setChatMode}

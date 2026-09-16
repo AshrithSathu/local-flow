@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import localFlowProfile from "../config/localFlow.json";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
@@ -1458,6 +1459,60 @@ function syncAfterLocalWrite(method: "syncDictionaryNow" | "syncSnippetsNow"): v
   void import("../services/SyncService.js").then(({ syncService }) => {
     if (syncService.canSync()) void syncService[method]();
   });
+}
+
+// Apply the personal profile after legacy migrations, once per isolated install.
+if (
+  isBrowser &&
+  import.meta.env?.VITE_LOCAL_FLOW === "1" &&
+  localStorage.getItem("_localFlowProfileApplied") !== "1"
+) {
+  for (const [key, value] of Object.entries(localFlowProfile))
+    localStorage.setItem(key, String(value));
+  localStorage.setItem("_localFlowProfileApplied", "1");
+}
+
+// Existing personal installs predate separate upload/note cloud defaults.
+if (
+  isBrowser &&
+  import.meta.env?.VITE_LOCAL_FLOW === "1" &&
+  localStorage.getItem("_localFlowCloudContextsApplied") !== "1"
+) {
+  for (const prefix of ["meeting", "upload"]) {
+    if (
+      localStorage.getItem(`${prefix}TranscriptionMode`) === "providers" &&
+      localStorage.getItem(`${prefix}CloudTranscriptionMode`) === "byok"
+    )
+      continue;
+    localStorage.setItem(`${prefix}TranscriptionMode`, "providers");
+    localStorage.setItem(`${prefix}UseLocalWhisper`, "false");
+    for (const [suffix, value] of Object.entries({
+      Mode: "byok",
+      Provider: "custom",
+      Model: "cloudflare-whisper",
+      BaseUrl: localFlowProfile.cloudTranscriptionBaseUrl,
+    }))
+      localStorage.setItem(`${prefix}CloudTranscription${suffix}`, value);
+  }
+  localStorage.setItem("_localFlowCloudContextsApplied", "1");
+}
+
+if (
+  isBrowser &&
+  import.meta.env?.VITE_LOCAL_FLOW === "1" &&
+  localStorage.getItem("_localFlowNovaApplied") !== "1"
+) {
+  localStorage.setItem("cloudTranscriptionProvider", "deepgram");
+  localStorage.setItem("cloudTranscriptionModel", "nova-3");
+  localStorage.setItem("meetingCloudTranscriptionProvider", "deepgram");
+  localStorage.setItem("meetingCloudTranscriptionModel", "nova-3");
+  for (const key of [
+    "autoGenerateNoteTitle",
+    "useDictationTranslation",
+    "speakerDiarizationEnabled",
+  ])
+    localStorage.setItem(key, "false");
+  localStorage.setItem("_localFlowNovaApplied", "1");
 }
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({

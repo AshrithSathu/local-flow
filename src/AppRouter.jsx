@@ -90,6 +90,19 @@ function MainApp() {
   useEffect(() => {
     if (!authLoaded) return;
 
+    // The personal build is already configured for the owner's Worker.
+    if (
+      import.meta.env.VITE_LOCAL_FLOW === "1" &&
+      !isSignedIn &&
+      localStorage.getItem("_localFlowSetup") !== "1"
+    ) {
+      localStorage.setItem("onboardingCompleted", "true");
+      localStorage.setItem("skipAuth", "true");
+      localStorage.removeItem(LEGACY_ONBOARDING_STEP_KEY);
+      localStorage.removeItem(ONBOARDING_SESSION_KEY);
+      localStorage.setItem("_localFlowSetup", "1");
+    }
+
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
     const authSkipped =
       localStorage.getItem("authenticationSkipped") === "true" ||

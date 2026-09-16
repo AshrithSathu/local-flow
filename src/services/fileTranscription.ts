@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import { withSessionRefresh } from "../lib/auth";
 import {
   resolveTranscriptionRoute,
@@ -85,7 +86,7 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
     case "tinfoil":
       return keys.tinfoilApiKey;
     case "deepgram":
-      return keys.deepgramApiKey;
+      return IS_LOCAL_FLOW ? keys.customTranscriptionApiKey || "" : keys.deepgramApiKey;
     case "assemblyai":
       return keys.assemblyaiApiKey;
     case "custom":

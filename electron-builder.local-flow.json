@@ -1,0 +1,28 @@
+{
+  "extends": "./electron-builder.json",
+  "appId": "personal.local-flow.dictation",
+  "productName": "Local Flow",
+  "extraMetadata": { "productName": "Local Flow" },
+  "publish": null,
+  "protocols": { "name": "Local Flow", "schemes": ["local-flow"] },
+  "directories": { "output": "dist/local-flow" },
+  "mac": {
+    "identity": null,
+    "notarize": false,
+    "target": ["dir"],
+    "extraResources": []
+  },
+  "extraResources": [
+    { "from": "src/assets", "to": "src/assets", "filter": ["**/*", "!fonts/yowza/**"] },
+    {
+      "from": "resources/bin",
+      "to": "bin",
+      "filter": [
+        "macos-globe-listener",
+        "macos-fast-paste",
+        "macos-text-monitor",
+        "macos-audio-tap"
+      ]
+    }
+  ]
+}

@@ -179,6 +179,49 @@ async function mountCompletionHarness(
   };
 }
 
+test("release-to-delivery timing is recorded only after clipboard delivery and contains no dictated text", async (t) => {
+  let releaseWrite;
+  let notifyWrite;
+  const writeStarted = new Promise((resolve) => {
+    notifyWrite = resolve;
+  });
+  const write = new Promise((resolve) => {
+    releaseWrite = resolve;
+  });
+  const harness = await mountCompletionHarness(t, {
+    writeClipboard: () => {
+      notifyWrite();
+      return write;
+    },
+  });
+  const pending = harness.complete({
+    success: true,
+    text: "Original dictation after cleanup timeout",
+    rawText: "Original dictation after cleanup timeout",
+    source: "deepgram-streaming",
+    timings: {
+      stopStartedAt: performance.now() - 100,
+      transcriptionProcessingDurationMs: 60,
+      reasoningProcessingDurationMs: 30,
+      recoveryDurationMs: 0,
+    },
+  });
+  await writeStarted;
+  assert.equal(
+    harness.logs.some((log) => log.message === "Dictation delivery timing"),
+    false
+  );
+  releaseWrite({ success: true });
+  await pending;
+  const timing = harness.logs.find((log) => log.message === "Dictation delivery timing").meta;
+  assert.equal(timing.success, true);
+  assert.equal(timing.delivery, "clipboard");
+  assert.ok(timing.releaseToDeliveryMs >= 100);
+  assert.equal(timing.cleanupMs, 30);
+  assert.equal(JSON.stringify(timing).includes("Original dictation"), false);
+  assert.deepEqual(harness.bridgeWrites, ["Original dictation after cleanup timeout"]);
+});
+
 test("clipboard-only rejection cannot cancel non-preview transcription persistence", async (t) => {
   const harness = await mountCompletionHarness(t, {
     writeClipboard: async () => {

@@ -32,7 +32,10 @@ const electronStub = {
   shell: {},
   dialog: {},
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
-  systemPreferences: { getMediaAccessStatus: () => "granted" },
+  systemPreferences: {
+    getMediaAccessStatus: () => "granted",
+    isTrustedAccessibilityClient: () => true,
+  },
   session: { fromPartition: () => ({}) },
   clipboard: {},
   nativeImage: {},
@@ -96,6 +99,39 @@ test("paste-text reports an onboarding demo no-op without invoking the clipboard
 
   assert.deepEqual(result, { success: true, pasted: false });
   assert.equal(pasteCalls, 0);
+});
+
+test("unavailable macOS Accessibility skips target helpers and goes straight to clipboard fallback", async (t) => {
+  if (process.platform !== "darwin") return t.skip("macOS only");
+  electronStub.systemPreferences.isTrustedAccessibilityClient = () => false;
+  t.after(() => {
+    electronStub.systemPreferences.isTrustedAccessibilityClient = () => true;
+    target.textEditMonitor = null;
+    target.selectionManager = null;
+  });
+  target.textEditMonitor = {
+    captureTargetPid: () => assert.fail("Do not wait for a target helper without permission"),
+    activateTargetPid: () => assert.fail("Do not activate without permission"),
+  };
+  target.selectionManager = {
+    captureTarget: () => assert.fail("Do not read selection without permission"),
+  };
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  let copied = false;
+  target.clipboardManager = {
+    pasteText: async () => {
+      copied = true;
+      return { pasted: false };
+    },
+  };
+  assert.deepEqual(await handlers.get("capture-dictation-target")(), { success: true, pid: null });
+  assert.deepEqual(
+    await handlers.get("paste-text")({ sender: {} }, "Test dictation", {
+      allowClipboardFallback: true,
+    }),
+    { success: true, pasted: false }
+  );
+  assert.equal(copied, true);
 });
 
 test("paste-text reports pasted only after the clipboard paste completes", async () => {

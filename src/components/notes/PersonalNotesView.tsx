@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../../config/localFlow";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -709,7 +710,7 @@ export default function PersonalNotesView({
     if (action) void runNoteAction(action);
   };
 
-  if (!isOnboardingComplete) {
+  if (!IS_LOCAL_FLOW && !isOnboardingComplete) {
     return (
       <>
         <NotesOnboarding onComplete={completeOnboarding} />
@@ -728,20 +729,22 @@ export default function PersonalNotesView({
         style={{ width: isSidePanelLayout ? 0 : "13rem" }}
       >
         <div className="w-52 shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full">
-          <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
-            <button
-              onClick={() => setShowActionManager(true)}
-              className={cn(
-                "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-                "text-foreground/85 hover:text-foreground hover:bg-foreground/5",
-                "transition-colors duration-150",
-                "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-              )}
-            >
-              <Sparkles size={14} className="shrink-0" />
-              {t("notes.sidebar.actions")}
-            </button>
-          </div>
+          {!IS_LOCAL_FLOW && (
+            <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
+              <button
+                onClick={() => setShowActionManager(true)}
+                className={cn(
+                  "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
+                  "text-foreground/85 hover:text-foreground hover:bg-foreground/5",
+                  "transition-colors duration-150",
+                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                )}
+              >
+                <Sparkles size={14} className="shrink-0" />
+                {t("notes.sidebar.actions")}
+              </button>
+            </div>
+          )}
 
           <SpacesTree
             onDeleteNote={handleDelete}
@@ -793,21 +796,25 @@ export default function PersonalNotesView({
               onCancelPendingSaves={cancelPendingSaves}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
-              onGenerateSummary={generateSummary}
+              onGenerateSummary={IS_LOCAL_FLOW ? undefined : generateSummary}
               actionPicker={
-                <ActionPicker
-                  onRunAction={runNoteAction}
-                  onManageActions={() => setShowActionManager(true)}
-                  disabled={
-                    (!editorNote?.content?.trim() &&
-                      !hasLiveTranscript &&
-                      !activeNoteRawTranscript) ||
-                    actionProcessingState === "processing"
-                  }
-                />
+                !IS_LOCAL_FLOW && (
+                  <ActionPicker
+                    onRunAction={runNoteAction}
+                    onManageActions={() => setShowActionManager(true)}
+                    disabled={
+                      (!editorNote?.content?.trim() &&
+                        !hasLiveTranscript &&
+                        !activeNoteRawTranscript) ||
+                      actionProcessingState === "processing"
+                    }
+                  />
+                )
               }
             />
-            <ActionManagerDialog open={showActionManager} onOpenChange={setShowActionManager} />
+            {!IS_LOCAL_FLOW && (
+              <ActionManagerDialog open={showActionManager} onOpenChange={setShowActionManager} />
+            )}
           </>
         ) : activeContext && overviewSpace ? (
           <ContainerOverview

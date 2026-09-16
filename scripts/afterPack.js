@@ -301,6 +301,16 @@ function verifyUnpackedBinaries(context) {
 // ---------------------------------------------------------------------------
 
 exports.default = async function (context) {
+  if (
+    context.electronPlatformName === "darwin" &&
+    context.packager.appInfo.productFilename === "Local Flow"
+  ) {
+    // Fail packaging rather than ship permission controls without capture.
+    fs.accessSync(
+      path.join(resolveResourcesDir(context), "bin", "macos-audio-tap"),
+      fs.constants.X_OK
+    );
+  }
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);

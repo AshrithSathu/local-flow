@@ -1,5 +1,6 @@
 import ReasoningService from "../services/ReasoningService";
 import logger from "../utils/logger";
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
@@ -366,6 +367,8 @@ const makeDictationRealtimeProvider = (id) => ({
 
 const STREAMING_PROVIDERS = {
   deepgram: {
+    // CloseStream already flushes all final results before stop resolves.
+    finalizesOnStop: IS_LOCAL_FLOW,
     warmup: (opts) => window.electronAPI.deepgramStreamingWarmup(opts),
     start: (opts) => window.electronAPI.deepgramStreamingStart(opts),
     send: (buf) => window.electronAPI.deepgramStreamingSend(buf),
@@ -4060,7 +4063,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
-      const result = await window.electronAPI.saveTranscription("", null, {
+      const result = await window.electronAPI.saveTranscription("", metadata.rawText || null, {
         status: "failed",
         errorMessage,
         errorCode,
@@ -4516,6 +4519,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       //    events are lost during the connect handshake.
       this.streamingFinalText = "";
       this.streamingPartialText = "";
+      this.streamingError = null;
       this.streamingTextBump = null;
       this.streamingTextDebounce = null;
 
@@ -4542,12 +4546,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const errorCleanup = provider.onError((error) => {
         if (!ownsSession()) return;
+        this.streamingError = error;
         logger.error("Streaming provider error", { error }, "streaming");
+        // Startup's catch reports the failure and releases capture; recovery applies only after connection.
+        if (IS_LOCAL_FLOW && this.streamingStartInProgress) return;
         this.onError?.({
-          title: "Streaming Error",
-          description: error,
+          title: IS_LOCAL_FLOW && this.isStreaming ? "Live preview interrupted" : "Streaming Error",
+          description:
+            IS_LOCAL_FLOW && this.isStreaming
+              ? "Keep speaking. Release the shortcut to transcribe the captured recording."
+              : error,
+          ...(IS_LOCAL_FLOW && this.isStreaming ? { variant: "default" } : {}),
         });
-        if (this.isStreaming) {
+        // Personal dictation keeps capturing locally until release, so batch retry has the whole utterance.
+        if (this.isStreaming && !IS_LOCAL_FLOW) {
           logger.warn("Connection lost during streaming, auto-stopping", {}, "streaming");
           this.stopStreamingRecording().catch((e) => {
             logger.error(
@@ -4879,6 +4891,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async _finalizeStreamingRecording(sessionId) {
+    const t0 = performance.now();
     if (
       sessionId !== null &&
       sessionId !== undefined &&
@@ -4926,7 +4939,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this._streamingMicSwapPromise) await this._streamingMicSwapPromise;
     if (wasCancelled()) return abandonFinalization();
 
-    const t0 = performance.now();
     let finalText = this.streamingFinalText || "";
 
     // 1. Stop the processor — it flushes its remaining buffer on "stop".
@@ -4990,11 +5002,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // 3. Finalize tells the provider to process any buffered audio and send final results.
     //    Wait for the transcript to settle before disconnecting.
     const provider = this.getStreamingProvider();
-    provider.finalize?.();
-    if (provider.awaitsFinalTranscript) {
-      await this.awaitStreamingTextSettled(provider.finalCeilingMs);
+    if (provider.finalizesOnStop) {
+      // Skip the duplicate Finalize request and its fixed 300ms wait.
+    } else if (IS_LOCAL_FLOW && this.streamingError) {
+      // A broken socket cannot deliver a final result; use the retained recording.
     } else {
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      provider.finalize?.();
+      if (provider.awaitsFinalTranscript) {
+        await this.awaitStreamingTextSettled(provider.finalCeilingMs);
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
     }
     if (wasCancelled()) return abandonFinalization();
     const tForceEndpoint = performance.now();
@@ -5005,7 +5023,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
     const tTerminate = performance.now();
 
-    finalText = this.streamingFinalText || "";
+    finalText =
+      (provider.finalizesOnStop && stopResult?.text) || this.streamingFinalText || "";
 
     if (!finalText && this.streamingPartialText) {
       finalText = this.streamingPartialText;
@@ -5049,9 +5068,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // snapshot the pre-reasoning transcript now to report as `rawText` — matching
     // the batch path, which already keeps raw and processed text separate.
     const rawStreamingText = finalText;
+    let reasoningDurationMs = 0;
+    const interrupted = IS_LOCAL_FLOW && Boolean(this.streamingError);
 
     let usedCloudReasoning = false;
-    if (finalText) {
+    if (finalText && !interrupted) {
       const reasoningStart = performance.now();
       const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
@@ -5202,6 +5223,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (route.kind === "agent") this._notifyAgentReasoningFailed();
       }
       if (wasCancelled()) return true;
+      reasoningDurationMs =
+        route.kind === "skip" ? 0 : Math.round(performance.now() - reasoningStart);
     }
 
     // If streaming produced no text, fall back to batch — routed so BYOK audio
@@ -5209,7 +5232,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let usedBatchFallback = false;
     let batchWarning = null;
     let batchFallbackResult = null;
-    if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
+    const recoveryStartedAt = performance.now();
+    if (
+      (!finalText || interrupted) &&
+      (durationSeconds > 2 || interrupted) &&
+      fallbackBlob?.size > 0
+    ) {
       const target = resolveStreamingFallbackTarget(getSettings());
       if (target === "skip") {
         logger.warn(
@@ -5250,6 +5278,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     }
 
+    if (interrupted && !usedBatchFallback) {
+      // Partial text is recoverable, but must never look like a complete dictation at the cursor.
+      const message =
+        "Connection interrupted and recording retry failed. Review the captured text or retry from history if the recording was retained.";
+      await this.saveFailedTranscription(message, "STREAMING_INTERRUPTED", {
+        durationSeconds,
+        analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+        rawText: rawStreamingText,
+      });
+      if (wasCancelled()) return true;
+      this.onError?.({
+        title: "Dictation interrupted",
+        description: message,
+        transcript: rawStreamingText,
+      });
+      return true;
+    }
+
     if (finalText) {
       // The batch fallback routes through processTranscription, which already
       // applied the script; only streamed text still needs it.
@@ -5278,6 +5324,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         source: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
         clientTranscriptionId,
         analyticsOccurredAt: resultAnalyticsOccurredAt,
+        timings: {
+          stopStartedAt: t0,
+          transcriptionProcessingDurationMs: streamingSttProcessingMs,
+          reasoningProcessingDurationMs: usedBatchFallback
+            ? batchFallbackResult.timings?.reasoningProcessingDurationMs || 0
+            : reasoningDurationMs,
+          recoveryDurationMs: usedBatchFallback
+            ? Math.max(
+                0,
+                Math.round(tBeforePaste - recoveryStartedAt) -
+                  (batchFallbackResult.timings?.reasoningProcessingDurationMs || 0)
+              )
+            : 0,
+        },
         ...this._takePendingResultExtras(),
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
@@ -5351,7 +5411,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (wasCancelled()) return true;
 
-    if (!finalText) {
+    if (!finalText && !this.streamingError) {
       // Match the batch pipeline: settle processing first, then publish the
       // empty outcome so the warning cannot interrupt the thinking transition.
       this.onTranscriptionComplete?.({ success: true, text: "" });

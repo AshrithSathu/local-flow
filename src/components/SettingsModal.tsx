@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePolicyStore } from "../stores/policyStore";
@@ -127,12 +128,16 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         group: t("settingsModal.groups.system"),
       },
     ];
+    if (IS_LOCAL_FLOW)
+      return items.filter((item) => !["account", "plansBilling", "workspace"].includes(item.id));
     return isSignedIn ? items : items.filter((item) => item.id !== "workspace");
   }, [t, isSignedIn]);
 
   const resolveSection = (section: string | undefined): SettingsSectionType => {
-    if (!section) return "account";
-    return (SECTION_ALIASES[section] ?? section) as SettingsSectionType;
+    const resolved = SECTION_ALIASES[section || ""] ?? section;
+    if (IS_LOCAL_FLOW && (!resolved || ["account", "plansBilling", "workspace"].includes(resolved)))
+      return "general";
+    return (resolved || "account") as SettingsSectionType;
   };
 
   const [activeSection, setActiveSection] = React.useState<SettingsSectionType>(() =>

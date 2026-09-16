@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import React, { useState } from "react";
 import {
   Gift,
@@ -187,7 +188,7 @@ export default function ControlPanelSidebar({
           </div>
         )}
 
-        {onInviteTeam && (
+        {!IS_LOCAL_FLOW && onInviteTeam && (
           <button
             onClick={onInviteTeam}
             aria-label={t("sidebar.inviteTeam")}
@@ -198,7 +199,7 @@ export default function ControlPanelSidebar({
           </button>
         )}
 
-        {isSignedIn && onOpenReferrals && (
+        {!IS_LOCAL_FLOW && isSignedIn && onOpenReferrals && (
           <button
             onClick={onOpenReferrals}
             aria-label={t("sidebar.referral")}
@@ -218,14 +219,16 @@ export default function ControlPanelSidebar({
           <span className={rowLabelClass}>{t("sidebar.settings")}</span>
         </button>
 
-        <SupportDropdown
-          trigger={
-            <button aria-label={t("sidebar.support")} className={rowButtonClass}>
-              <HelpCircle size={16} className={rowIconClass} />
-              <span className={rowLabelClass}>{t("sidebar.support")}</span>
-            </button>
-          }
-        />
+        {!IS_LOCAL_FLOW && (
+          <SupportDropdown
+            trigger={
+              <button aria-label={t("sidebar.support")} className={rowButtonClass}>
+                <HelpCircle size={16} className={rowIconClass} />
+                <span className={rowLabelClass}>{t("sidebar.support")}</span>
+              </button>
+            }
+          />
+        )}
 
         <div className="mx-1 h-px bg-border/10 dark:bg-white/6 my-1.5!" />
 
@@ -252,7 +255,7 @@ export default function ControlPanelSidebar({
               </>
             ) : authLoaded && !isSignedIn ? (
               <p className="text-xs text-foreground/45 dark:text-foreground/55">
-                {t("sidebar.notSignedIn")}
+                {IS_LOCAL_FLOW ? "Local Flow · Cloud providers" : t("sidebar.notSignedIn")}
               </p>
             ) : null}
           </div>

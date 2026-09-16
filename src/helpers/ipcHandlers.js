@@ -1520,6 +1520,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("capture-dictation-target", async () => {
+      if (process.platform === "darwin" && !systemPreferences.isTrustedAccessibilityClient(false)) {
+        return { success: true, pid: null };
+      }
       const pid = (await this.textEditMonitor?.captureTargetPid?.()) ?? null;
       await this.selectionManager?.captureTarget?.();
       return { success: true, pid };
@@ -3023,7 +3026,11 @@ class IPCHandlers {
       // Activating the target by PID is more reliable than hide()'s implicit
       // focus hand-off for Chromium apps like Claude desktop and Brave (#668).
       let activated = false;
-      if (process.platform === "darwin" && this.textEditMonitor) {
+      if (
+        process.platform === "darwin" &&
+        this.textEditMonitor &&
+        systemPreferences.isTrustedAccessibilityClient(false)
+      ) {
         activated = await this.textEditMonitor.activateTargetPid();
       }
 

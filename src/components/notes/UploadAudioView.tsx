@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../../config/localFlow";
 import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -351,10 +352,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (useLocalWhisper) {
       // Local transcription: no file size restrictions
     } else if (isSelfHosted || cloudTranscriptionProvider === "custom") {
-      // Self-hosted / custom endpoints (e.g. local whisper.cpp): no file size restrictions
+      if (IS_LOCAL_FLOW) byokTooLarge = file.sizeBytes > byokMaxFileSize;
+      // Other custom servers define their own file size restrictions
     } else if (isByok) {
       byokTooLarge = file.sizeBytes > byokMaxFileSize;
-      if (byokTooLarge && !isSignedIn) {
+      if (byokTooLarge && !isSignedIn && !IS_LOCAL_FLOW) {
         requiresAccount = true;
       }
     } else {
@@ -982,109 +984,113 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 onOpenSettings={onOpenSettings}
               />
 
-              <div className="flex items-center gap-3 my-3">
-                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
-                <span className="text-[10px] text-foreground/45 uppercase tracking-wider">
-                  {t("notes.upload.orDivider")}
-                </span>
-                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
-              </div>
-
-              {urlExpanded ? (
-                <div>
-                  <textarea
-                    dir="ltr"
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder={t("notes.upload.pasteUrls")}
-                    rows={4}
-                    className={cn(uploadFieldClass, "w-full px-3 py-2 resize-none")}
-                    autoFocus
-                  />
-                  <div className="flex items-center gap-2 mt-2 justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setUrlExpanded(false);
-                        setUrlInput("");
-                      }}
-                      className="h-7 text-xs text-foreground/45"
-                    >
-                      {t("notes.upload.cancel")}
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleBatchUrlSubmit}
-                      disabled={!urlInput.trim()}
-                      className="h-7 text-xs"
-                    >
-                      {t("notes.upload.addToQueue")}
-                    </Button>
+              {!IS_LOCAL_FLOW && (
+                <>
+                  <div className="flex items-center gap-3 my-3">
+                    <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
+                    <span className="text-[10px] text-foreground/45 uppercase tracking-wider">
+                      {t("notes.upload.orDivider")}
+                    </span>
+                    <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
                   </div>
-                </div>
-              ) : (
-                <div dir="ltr" className="relative">
-                  {isYouTubeUrl(urlInput) ? (
-                    <svg
-                      viewBox="0 0 28 20"
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[13px] z-10 pointer-events-none"
-                    >
-                      <rect width="28" height="20" rx="4" fill="#FF0000" />
-                      <polygon points="11,4 11,16 21,10" fill="white" />
-                    </svg>
-                  ) : uploadFileUrlPattern.test(urlInput) ? (
-                    <FileAudio
-                      size={13}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
-                    />
+
+                  {urlExpanded ? (
+                    <div>
+                      <textarea
+                        dir="ltr"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        placeholder={t("notes.upload.pasteUrls")}
+                        rows={4}
+                        className={cn(uploadFieldClass, "w-full px-3 py-2 resize-none")}
+                        autoFocus
+                      />
+                      <div className="flex items-center gap-2 mt-2 justify-end">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setUrlExpanded(false);
+                            setUrlInput("");
+                          }}
+                          className="h-7 text-xs text-foreground/45"
+                        >
+                          {t("notes.upload.cancel")}
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={handleBatchUrlSubmit}
+                          disabled={!urlInput.trim()}
+                          className="h-7 text-xs"
+                        >
+                          {t("notes.upload.addToQueue")}
+                        </Button>
+                      </div>
+                    </div>
                   ) : (
-                    <Link2
-                      size={13}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
-                    />
+                    <div dir="ltr" className="relative">
+                      {isYouTubeUrl(urlInput) ? (
+                        <svg
+                          viewBox="0 0 28 20"
+                          className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[13px] z-10 pointer-events-none"
+                        >
+                          <rect width="28" height="20" rx="4" fill="#FF0000" />
+                          <polygon points="11,4 11,16 21,10" fill="white" />
+                        </svg>
+                      ) : uploadFileUrlPattern.test(urlInput) ? (
+                        <FileAudio
+                          size={13}
+                          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
+                        />
+                      ) : (
+                        <Link2
+                          size={13}
+                          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
+                        />
+                      )}
+                      <input
+                        dir="ltr"
+                        type="url"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleUrlSubmit();
+                          }
+                        }}
+                        onFocus={() => {
+                          if (urlInput.includes("\n")) setUrlExpanded(true);
+                        }}
+                        onPaste={(e) => {
+                          const pasted = e.clipboardData.getData("text");
+                          if (pasted.includes("\n")) {
+                            e.preventDefault();
+                            setUrlInput(pasted);
+                            setUrlExpanded(true);
+                          }
+                        }}
+                        placeholder={t("notes.upload.urlPlaceholder")}
+                        className={cn(uploadFieldClass, "w-full h-8 pl-8 pr-9")}
+                      />
+                      <button
+                        onClick={handleUrlSubmit}
+                        disabled={!urlInput.trim()}
+                        aria-label={t("notes.upload.urlSubmit")}
+                        className={cn(
+                          "absolute right-px top-px bottom-px w-7 rounded-r-[7px] flex items-center justify-center transition-colors",
+                          "border-l border-foreground/6 dark:border-white/10",
+                          urlInput.trim()
+                            ? "text-foreground/45 hover:text-foreground/60 hover:bg-foreground/[0.03] dark:hover:bg-white/[0.03]"
+                            : "text-foreground/45"
+                        )}
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
                   )}
-                  <input
-                    dir="ltr"
-                    type="url"
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleUrlSubmit();
-                      }
-                    }}
-                    onFocus={() => {
-                      if (urlInput.includes("\n")) setUrlExpanded(true);
-                    }}
-                    onPaste={(e) => {
-                      const pasted = e.clipboardData.getData("text");
-                      if (pasted.includes("\n")) {
-                        e.preventDefault();
-                        setUrlInput(pasted);
-                        setUrlExpanded(true);
-                      }
-                    }}
-                    placeholder={t("notes.upload.urlPlaceholder")}
-                    className={cn(uploadFieldClass, "w-full h-8 pl-8 pr-9")}
-                  />
-                  <button
-                    onClick={handleUrlSubmit}
-                    disabled={!urlInput.trim()}
-                    aria-label={t("notes.upload.urlSubmit")}
-                    className={cn(
-                      "absolute right-px top-px bottom-px w-7 rounded-r-[7px] flex items-center justify-center transition-colors",
-                      "border-l border-foreground/6 dark:border-white/10",
-                      urlInput.trim()
-                        ? "text-foreground/45 hover:text-foreground/60 hover:bg-foreground/[0.03] dark:hover:bg-white/[0.03]"
-                        : "text-foreground/45"
-                    )}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
+                </>
               )}
             </>
           )}
@@ -1257,7 +1263,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           )}
         </div>
 
-        {(state === "idle" || state === "selected") && (
+        {!IS_LOCAL_FLOW && (state === "idle" || state === "selected") && (
           <div className="max-w-[320px] mx-auto mt-4">
             <div className="flex items-center justify-between">
               <div>
@@ -1646,11 +1652,13 @@ function SelectedView({
             {t("notes.upload.byokTooLargeDetail", { size: byokMaxFileSizeMb })}
           </p>
           <p className="text-xs text-foreground/50 leading-relaxed mt-1.5 font-medium">
-            {requiresAccount
-              ? t("notes.upload.byokTooLargeNeedsAccount")
-              : isProUser
-                ? t("notes.upload.switchToCloudForLargeFiles")
-                : t("notes.upload.byokTooLargeNeedsUpgrade")}
+            {IS_LOCAL_FLOW
+              ? "Use a smaller audio file. This provider limit is not a subscription restriction."
+              : requiresAccount
+                ? t("notes.upload.byokTooLargeNeedsAccount")
+                : isProUser
+                  ? t("notes.upload.switchToCloudForLargeFiles")
+                  : t("notes.upload.byokTooLargeNeedsUpgrade")}
           </p>
         </div>
       )}
@@ -1673,7 +1681,7 @@ function SelectedView({
 
       <div className="flex items-center gap-2 justify-center flex-wrap">
         {/* BYOK too large — not signed in: Create Account */}
-        {byokTooLarge && requiresAccount && (
+        {!IS_LOCAL_FLOW && byokTooLarge && requiresAccount && (
           <Button
             variant="default"
             size="sm"
@@ -1685,7 +1693,7 @@ function SelectedView({
         )}
 
         {/* BYOK too large — signed in, Pro: Switch to Cloud */}
-        {byokTooLarge && !requiresAccount && isProUser && (
+        {!IS_LOCAL_FLOW && byokTooLarge && !requiresAccount && isProUser && (
           <Button
             variant="default"
             size="sm"
@@ -1697,14 +1705,14 @@ function SelectedView({
         )}
 
         {/* BYOK too large — signed in, Free: Upgrade */}
-        {byokTooLarge && !requiresAccount && !isProUser && (
+        {!IS_LOCAL_FLOW && byokTooLarge && !requiresAccount && !isProUser && (
           <Button variant="default" size="sm" onClick={onUpgrade} className="h-8 text-xs px-5">
             {t("notes.upload.upgrade")}
           </Button>
         )}
 
         {/* Cloud requires upgrade */}
-        {!byokTooLarge && requiresUpgrade && (
+        {!IS_LOCAL_FLOW && !byokTooLarge && requiresUpgrade && (
           <Button variant="default" size="sm" onClick={onUpgrade} className="h-8 text-xs px-5">
             {t("notes.upload.upgrade")}
           </Button>

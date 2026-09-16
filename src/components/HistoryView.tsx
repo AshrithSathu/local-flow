@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import { Fragment, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
@@ -226,14 +227,16 @@ export default function HistoryView({
             )}
           </div>
 
-          <div className="hidden w-80 shrink-0 md:block">
-            <UpcomingMeetings
-              events={events}
-              isLoading={eventsLoading}
-              isConnected={isConnected}
-              onConnectCalendar={onOpenIntegrations}
-            />
-          </div>
+          {!IS_LOCAL_FLOW && (
+            <div className="hidden w-80 shrink-0 md:block">
+              <UpcomingMeetings
+                events={events}
+                isLoading={eventsLoading}
+                isConnected={isConnected}
+                onConnectCalendar={onOpenIntegrations}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

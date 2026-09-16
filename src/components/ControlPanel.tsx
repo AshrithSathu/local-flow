@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -196,7 +197,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     installUpdate,
   } = useUpdater();
 
-  const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
+  const agentAllowedByPolicy = usePolicyStore(isAgentAllowed) && !IS_LOCAL_FLOW;
   const { createNote } = useCreateNote();
   // The note is created before the view switches so Notes mounts with it already open.
   const handleNewNote = useCallback(async () => {
@@ -337,6 +338,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [updateStatus.updateDownloaded, isDownloading, toast, t]);
 
   useEffect(() => {
+    if (IS_LOCAL_FLOW) return;
     const dispose = window.electronAPI?.onLimitReached?.(
       (data: { wordsUsed: number; limit: number }) => {
         if (!hasShownUpgradePrompt.current) {
@@ -460,7 +462,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [toast, t]);
 
   useEffect(() => {
-    fetchStreamingProviders();
+    if (!IS_LOCAL_FLOW) fetchStreamingProviders();
   }, []);
 
   const handleMeetingRecordingRequestHandled = useCallback(
@@ -1239,7 +1241,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   />
                 </Suspense>
               )}
-              {activeView === "integrations" && (
+              {!IS_LOCAL_FLOW && activeView === "integrations" && (
                 <Suspense fallback={null}>
                   <IntegrationsView
                     isPaid={usage?.hasPaidAccessOptimistic ?? false}

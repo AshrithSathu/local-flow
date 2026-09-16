@@ -11,6 +11,51 @@ const load = () => import("../../src/services/ai/inferenceProviders/openai.ts");
 
 const TRANSCRIPT = "## Meeting Transcript\nYou: we agreed to ship on Friday.\n".repeat(50);
 
+test("personal cleanup skips technical text, probes, retries, and aborts a stalled short request", async (t) => {
+  const { openaiProvider } = await load();
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const config = {
+    provider: "custom",
+    baseUrl: "https://personal.example/v1",
+    customApiKey: "test-key",
+  };
+  const call = (text) =>
+    openaiProvider.call({
+      text,
+      model: "local-flow-cleanup",
+      agentName: null,
+      config,
+      ctx: makeCtx(),
+    });
+  globalThis.fetch = () => assert.fail("Technical or already clean text should make no request");
+  assert.equal(await call("Use C++ in /foo/bar"), "Use C++ in /foo/bar");
+  assert.equal(await call("Do not delete the 42 files."), "Do not delete the 42 files.");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let started;
+  const requestStarted = new Promise((resolve) => {
+    started = resolve;
+  });
+  let requests = 0;
+  globalThis.fetch = (url, init) => {
+    requests++;
+    assert.equal(String(url), "https://personal.example/v1/chat/completions");
+    started();
+    return new Promise((_, reject) =>
+      init.signal.addEventListener("abort", () => {
+        reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+      })
+    );
+  };
+  const pending = call("Please do not delete the files");
+  await requestStarted;
+  t.mock.timers.tick(1700);
+  await assert.rejects(pending, (error) => error.code === "LLM_REQUEST_TIMEOUT");
+  assert.equal(requests, 1);
+});
+
 function makeCtx() {
   return {
     getApiKey: async () => "test-key",

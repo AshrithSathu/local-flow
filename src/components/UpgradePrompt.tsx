@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import { Dialog, DialogContent } from "./ui/dialog";
 import { ChevronRight } from "./icons";
 import { useTranslation } from "react-i18next";
@@ -22,6 +23,8 @@ export default function UpgradePrompt({
   const usage = useUsage();
   const { openBillingPortal } = useBillingPortal(usage);
   const isPastDue = usage?.isPastDue ?? false;
+
+  if (IS_LOCAL_FLOW) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -113,6 +116,8 @@ function OptionCard({
   highlighted?: boolean;
   disabled?: boolean;
 }) {
+  if (IS_LOCAL_FLOW) return null;
+
   return (
     <button
       onClick={onClick}

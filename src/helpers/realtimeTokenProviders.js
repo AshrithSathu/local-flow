@@ -43,9 +43,16 @@ const REALTIME_TOKEN_PROVIDERS = {
 
   "deepgram-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
     if (options.mode === "byok") {
-      const apiKey = environmentManager.getDeepgramKey();
+      const apiKey =
+        process.env.LOCAL_FLOW === "1"
+          ? environmentManager.getCustomTranscriptionKey()
+          : environmentManager.getDeepgramKey();
       if (!apiKey) {
-        throw new Error("No Deepgram API key configured. Add your key in Settings.");
+        throw new Error(
+          process.env.LOCAL_FLOW === "1"
+            ? "Cloudflare backend access token missing. Configure the Custom provider in Settings."
+            : "No Deepgram API key configured. Add your key in Settings."
+        );
       }
       return duplicate(streams, apiKey);
     }

@@ -86,6 +86,10 @@ function _initKeychain() {
 
 function _ensureInit() {
   if (mode) return;
+  if (app.getName() === "Local Flow") {
+    mode = safeStorage.isEncryptionAvailable() ? "safeStorage" : "unavailable";
+    return;
+  }
   if (_initKeychain()) {
     mode = "keychain";
     return;

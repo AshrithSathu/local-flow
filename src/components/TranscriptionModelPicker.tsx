@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -266,7 +267,8 @@ interface ProviderCredentialField {
     | "cortiTenant"
     | "tinfoilApiKey"
     | "deepgramApiKey"
-    | "assemblyaiApiKey";
+    | "assemblyaiApiKey"
+    | "customTranscriptionApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
   placeholder?: string;
@@ -520,10 +522,20 @@ export default function TranscriptionModelPicker({
   const cloudProviderTabs = useMemo(() => {
     const availableIds = new Set(availableCloudProviders.map((p) => p.id));
     if (!streamingOnly) availableIds.add("custom");
-    const tabs = CLOUD_PROVIDER_TABS.filter((provider) => availableIds.has(provider.id)).map(
+    const tabs = CLOUD_PROVIDER_TABS.filter(
       (provider) =>
-        provider.id === "custom"
-          ? { ...provider, name: t("transcription.customProvider") }
+        availableIds.has(provider.id) &&
+        (!IS_LOCAL_FLOW || ["deepgram", "custom"].includes(provider.id))
+    ).map((provider) =>
+      IS_LOCAL_FLOW && provider.id === "deepgram"
+        ? { ...provider, name: "Cloudflare Nova-3" }
+        : provider.id === "custom"
+          ? {
+              ...provider,
+              name: IS_LOCAL_FLOW
+                ? "Cloudflare Whisper (batch)"
+                : t("transcription.customProvider"),
+            }
           : provider
     );
     return filterByokProviderOptionsByPolicy(tabs, "transcription", policyState);
@@ -971,7 +983,12 @@ export default function TranscriptionModelPicker({
   );
 
   const providerCredentials =
-    PROVIDER_CREDENTIALS[displayedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
+    IS_LOCAL_FLOW && displayedCloudProvider === "deepgram"
+      ? ({ consoleUrl: "", fields: [{ key: "customTranscriptionApiKey", input: "secret" }] } as {
+          consoleUrl: string;
+          fields: ProviderCredentialField[];
+        })
+      : (PROVIDER_CREDENTIALS[displayedCloudProvider] ?? PROVIDER_CREDENTIALS.openai);
   const credentialValues: Record<ProviderCredentialField["key"], string> = {
     openaiApiKey,
     groqApiKey,
@@ -984,6 +1001,7 @@ export default function TranscriptionModelPicker({
     cortiTenant,
     tinfoilApiKey,
     deepgramApiKey,
+    customTranscriptionApiKey,
     assemblyaiApiKey,
   };
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
@@ -998,6 +1016,7 @@ export default function TranscriptionModelPicker({
     cortiTenant: setCortiTenant,
     tinfoilApiKey: setTinfoilApiKey,
     deepgramApiKey: setDeepgramApiKey,
+    customTranscriptionApiKey: setCustomTranscriptionApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
   };
 
@@ -1244,54 +1263,60 @@ export default function TranscriptionModelPicker({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {providerCredentials.fields.map((field, index) => (
-                    <div key={field.key} className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-medium text-foreground">
-                          {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
-                        </label>
-                        {index === 0 && (
-                          <GetApiKeyLink
-                            url={providerCredentials.consoleUrl}
-                            labelKey="transcription.getKey"
-                            className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                  {IS_LOCAL_FLOW && displayedCloudProvider === "deepgram" && (
+                    <p className="text-xs text-muted-foreground">
+                      Uses your secured Cloudflare backend. No Deepgram API key required.
+                    </p>
+                  )}
+                  {!(IS_LOCAL_FLOW && displayedCloudProvider === "deepgram") &&
+                    providerCredentials.fields.map((field, index) => (
+                      <div key={field.key} className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-foreground">
+                            {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
+                          </label>
+                          {index === 0 && providerCredentials.consoleUrl && (
+                            <GetApiKeyLink
+                              url={providerCredentials.consoleUrl}
+                              labelKey="transcription.getKey"
+                              className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                            />
+                          )}
+                        </div>
+                        {field.input === "secret" ? (
+                          <ApiKeyInput
+                            apiKey={credentialValues[field.key]}
+                            setApiKey={credentialSetters[field.key]}
+                            label=""
+                            helpText=""
+                          />
+                        ) : field.input === "select" ? (
+                          <Select
+                            value={credentialValues[field.key]}
+                            onValueChange={credentialSetters[field.key]}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options?.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            dir="ltr"
+                            value={credentialValues[field.key]}
+                            onChange={(e) => credentialSetters[field.key](e.target.value)}
+                            placeholder={field.placeholder}
+                            className="h-8 text-sm"
                           />
                         )}
                       </div>
-                      {field.input === "secret" ? (
-                        <ApiKeyInput
-                          apiKey={credentialValues[field.key]}
-                          setApiKey={credentialSetters[field.key]}
-                          label=""
-                          helpText=""
-                        />
-                      ) : field.input === "select" ? (
-                        <Select
-                          value={credentialValues[field.key]}
-                          onValueChange={credentialSetters[field.key]}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {field.options?.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          dir="ltr"
-                          value={credentialValues[field.key]}
-                          onChange={(e) => credentialSetters[field.key](e.target.value)}
-                          placeholder={field.placeholder}
-                          className="h-8 text-sm"
-                        />
-                      )}
-                    </div>
-                  ))}
+                    ))}
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-foreground">

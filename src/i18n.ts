@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "./config/localFlow";
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import { PROMPTS_BY_LOCALE } from "./locales/prompts";
@@ -103,7 +104,14 @@ const storageLanguage =
 
 const initialLanguage = normalizeUiLanguage(storageLanguage || browserLanguage || "en");
 
+i18n.use({
+  type: "postProcessor",
+  name: "localFlowBrand",
+  process: (text: string) => text.replaceAll("OpenWhispr", "Local Flow"),
+});
+
 void i18n.use(initReactI18next).init({
+  postProcess: IS_LOCAL_FLOW ? ["localFlowBrand"] : [],
   resources,
   lng: initialLanguage,
   fallbackLng: "en",

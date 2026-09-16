@@ -1,3 +1,5 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow.ts";
+import localFlowProfile from "../config/localFlow.json" with { type: "json" };
 // Single source of truth for batch speech-to-text routing across dictation,
 // retry, and upload. Callers resolve their scope's settings into the flat base
 // names and handle the OpenWhispr-cloud pipeline upstream; streaming provider
@@ -326,6 +328,17 @@ export function resolveTranscriptionRoute({
   if (s.useLocalWhisper) {
     return { transport: "local" };
   }
+
+  if (IS_LOCAL_FLOW && s.cloudTranscriptionProvider === "deepgram")
+    return {
+      transport: "http-batch",
+      provider: "custom",
+      endpoint: `${localFlowProfile.cloudTranscriptionBaseUrl}/audio/transcriptions`,
+      model: "cloudflare-nova-3",
+      auth: { scheme: "bearer", keyRef: "custom" },
+      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+      language,
+    };
 
   const provider = s.cloudTranscriptionProvider || "openai";
   const model = resolveByokModel(provider, request?.model ?? s.cloudTranscriptionModel);

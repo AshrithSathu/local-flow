@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../../config/localFlow";
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -883,7 +884,7 @@ export function MeetingTranscriptChat({
   return (
     <div className="h-full flex flex-col">
       {consentNotice}
-      {(isRecording || isDiarizing) && (
+      {!IS_LOCAL_FLOW && (isRecording || isDiarizing) && (
         <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 mx-4 mb-1.5 px-3 py-1.5 rounded-lg border border-border/70 bg-surface-2/40 text-xs text-foreground">
           <div className="flex items-center gap-1.5 min-w-0">
             {isDiarizing ? (

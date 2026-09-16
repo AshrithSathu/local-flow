@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadAudioManager } = require("./harness/audioManager");
 
-async function loadManagerClass(t) {
+async function loadManagerClass(t, personal = false) {
   const { AudioManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-streaming-finalization-test-",
     settingsKey: "__streamingFinalizationSettings",
@@ -12,6 +12,7 @@ async function loadManagerClass(t) {
       cloudTranscriptionMode: "byok",
       cloudTranscriptionProvider: "openai",
     },
+    mockModules: { "/config/localFlow": `export const IS_LOCAL_FLOW = ${personal};` },
   });
   return AudioManager;
 }
@@ -133,6 +134,160 @@ test("streaming completion keeps the recording occurrence time", async (t) => {
   await manager.stopStreamingRecording();
 
   assert.equal(completion.analyticsOccurredAt, new Date(recordingStartedAt).toISOString());
+  assert.ok(completion.timings.stopStartedAt >= 0);
+  assert.ok(completion.timings.transcriptionProcessingDurationMs >= 120);
+  assert.equal(completion.timings.reasoningProcessingDurationMs, 0);
+});
+
+test("close-stream finalization skips the duplicate handshake and uses the complete stop transcript", async (t) => {
+  const AudioManager = await loadManagerClass(t, true);
+  const { manager } = createFinalizingManager(AudioManager);
+  globalThis.window.dispatchEvent = () => true;
+  manager.streamingFinalText = "Early words.";
+  manager.finalizeChineseScript = async (text) => text;
+  manager.awaitStreamingTextSettled = () => assert.fail("Stop owns finalization");
+  manager.getStreamingProvider = () => ({
+    finalizesOnStop: true,
+    finalize: () => assert.fail("Do not send duplicate Finalize"),
+    stop: async () => ({ success: true, text: "Early words. Do not delete the 42 files." }),
+  });
+  let completed;
+  manager.onTranscriptionComplete = (result) => {
+    completed = result;
+  };
+  await manager.stopStreamingRecording();
+  assert.equal(completed.rawText, "Early words. Do not delete the 42 files.");
+  assert.equal(completed.text, completed.rawText);
+});
+
+test("interrupted personal streams retry the complete recording and never publish partial text on failure", async (t) => {
+  const AudioManager = await loadManagerClass(t, true);
+  globalThis.window.dispatchEvent = () => true;
+  for (const succeeds of [true, false]) {
+    const { manager } = createFinalizingManager(AudioManager);
+    const audio = new Blob(["complete captured recording"]);
+    manager.streamingError = "Connection lost";
+    manager.streamingFinalText = "Please delete";
+    manager.mergeRecordedSegments = async () => audio;
+    manager.finalizeChineseScript = async (text) => text;
+    manager.awaitStreamingTextSettled = () => assert.fail("Do not wait for a broken socket");
+    let retries = 0;
+    manager.processWithOpenAIAPI = async (blob) => {
+      assert.equal(blob, audio);
+      retries++;
+      if (!succeeds) throw new Error("Offline");
+      return {
+        text: "Please delete nothing.",
+        rawText: "Please delete nothing.",
+        source: "openai",
+      };
+    };
+    let saved;
+    manager.saveFailedTranscription = async (...args) => {
+      saved = args;
+    };
+    let error;
+    manager.onError = (value) => {
+      error = value;
+    };
+    let completion;
+    manager.onTranscriptionComplete = (value) => {
+      completion = value;
+    };
+    await manager.stopStreamingRecording();
+    assert.equal(retries, 1, "Even a short interrupted recording must retry");
+    assert.equal(manager.isProcessing, false);
+    if (succeeds) {
+      assert.equal(completion.text, "Please delete nothing.");
+      assert.equal(completion.rawText, "Please delete nothing.");
+      assert.equal(saved, undefined);
+    } else {
+      assert.equal(completion, undefined, "Partial dictation must never reach paste");
+      assert.equal(saved[1], "STREAMING_INTERRUPTED");
+      assert.equal(saved[2].rawText, "Please delete");
+      assert.equal(error.transcript, "Please delete");
+    }
+  }
+});
+
+test("a failed stream does not overwrite its connection error with a microphone warning", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.streamingError = "Connection lost (code: 1011)";
+  let emptyOutcome = false;
+  manager.onTranscriptionComplete = () => {
+    emptyOutcome = true;
+  };
+  await manager.stopStreamingRecording();
+  assert.equal(manager.isProcessing, false);
+  assert.equal(emptyOutcome, false);
+});
+
+test("personal connection loss keeps the microphone and fallback recorder running until release", async (t) => {
+  const AudioManager = await loadManagerClass(t, true);
+  const { manager } = createFinalizingManager(AudioManager);
+  const originalWorklet = globalThis.AudioWorkletNode;
+  globalThis.AudioWorkletNode = class {
+    constructor() {
+      this.port = { postMessage() {} };
+    }
+    disconnect() {}
+  };
+  t.after(() => {
+    globalThis.AudioWorkletNode = originalWorklet;
+  });
+  let emitError;
+  let trackStops = 0;
+  const stream = {
+    getAudioTracks: () => [{ getSettings: () => ({}) }],
+    getTracks: () => [
+      {
+        stop() {
+          trackStops++;
+        },
+      },
+    ],
+  };
+  const source = { connect() {}, disconnect() {} };
+  Object.assign(manager, {
+    isRecording: false,
+    isStreaming: false,
+    preparedMicCapture: { take: async () => null },
+    getAudioConstraints: async () => ({}),
+    _acquireCaptureStream: async () => stream,
+    startStreamingFallbackRecorder() {},
+    getOrCreateAudioContext: async () => ({
+      createMediaStreamSource: () => source,
+      createAnalyser: () => ({}),
+      audioWorklet: { addModule: async () => {} },
+    }),
+    getWorkletBlobUrl: () => "",
+    getKeyterms: () => [],
+    beginMicRecovery: async () => {},
+    getStreamingProvider: () => ({
+      onPartial: () => () => {},
+      onFinal: () => () => {},
+      onError: (cb) => {
+        emitError = cb;
+        return () => {};
+      },
+      onSessionEnd: () => () => {},
+      start: async () => ({ success: true }),
+    }),
+  });
+  let notice;
+  manager.onError = (value) => {
+    notice = value;
+  };
+  assert.equal(await manager.startStreamingRecording(), true);
+  emitError("Connection lost");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(manager.isRecording, true);
+  assert.equal(manager.isStreaming, true);
+  assert.equal(trackStops, 0);
+  assert.equal(manager.streamingStream, stream);
+  assert.equal(manager.streamingError, "Connection lost");
+  assert.equal(notice.variant, "default");
 });
 
 test("cancelling an active streaming recording discards it without publishing text", async (t) => {
