@@ -1075,7 +1075,7 @@ export default function NoteEditor({
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {canEditNote && (
+              {canEditNote && !IS_LOCAL_FLOW && (
                 <NoteRecordControl
                   isRecording={isRecording}
                   isProcessing={isProcessing}

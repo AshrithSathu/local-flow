@@ -1176,12 +1176,13 @@ async function startApp() {
   // Set up meeting mode hotkey
   const isMeetingPress = createHotkeyRepeatGate();
   const meetingHotkeyCallback = () => {
+    if (IS_LOCAL_FLOW) return;
     if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
     windowManager.startManualMeeting();
   };
 
-  const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
+  const savedMeetingKey = IS_LOCAL_FLOW ? "" : environmentManager.getMeetingKey?.() || "";
   if (savedMeetingKey) {
     const result = await hotkeyManager.registerSlot(
       "meeting",

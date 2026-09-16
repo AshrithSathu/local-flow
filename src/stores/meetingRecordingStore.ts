@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
@@ -767,6 +768,7 @@ export interface StartRecordingArgs {
 // outcome (including setup failures, which are reported through the store) is
 // "accepted" so callers don't roll back UI they didn't own.
 export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
+  if (IS_LOCAL_FLOW) return false;
   if (isRecordingFlag || isStartingFlag) return true;
   if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting")) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");

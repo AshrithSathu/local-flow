@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-const profile = JSON.parse(fs.readFileSync(new URL("../src/config/localFlow.json", import.meta.url), "utf8"));
+const profile = JSON.parse(
+  fs.readFileSync(new URL("../src/config/localFlow.json", import.meta.url), "utf8")
+);
 const base = profile.cloudTranscriptionBaseUrl.replace(/\/v1\/?$/, "");
 const { ACCESS_TOKEN } = JSON.parse(
   fs.readFileSync(new URL("./.secrets.json", import.meta.url), "utf8")
@@ -12,7 +14,7 @@ assert.equal((await fetch(`${base}/v1/models`)).status, 401);
 assert.equal((await fetch(`${base}/v1/models`, { headers })).status, 200);
 if (process.argv[2]) {
   const form = new FormData();
-  form.set("model", "cloudflare-whisper");
+  form.set("model", "local-flow-transcription");
   form.set("language", "en");
   form.set(
     "file",

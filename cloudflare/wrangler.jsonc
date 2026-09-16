@@ -4,7 +4,10 @@
   "compatibility_date": "2026-09-16",
   "account_id": "2eeab1bbed5febd4dda2477af4d60369",
   "workers_dev": true,
-  "placement": { "mode": "off" },
-  "ai": { "binding": "AI" },
-  "observability": { "enabled": false }
+  "placement": {
+    "mode": "off",
+  },
+  "observability": {
+    "enabled": false,
+  },
 }

@@ -1515,6 +1515,29 @@ if (
   localStorage.setItem("_localFlowNovaApplied", "1");
 }
 
+// Migrate existing cloud-streaming installs without changing shortcuts or retention.
+if (
+  isBrowser &&
+  import.meta.env?.VITE_LOCAL_FLOW === "1" &&
+  localStorage.getItem("_localFlowOpenRouterApplied") !== "1"
+) {
+  for (const prefix of ["", "meeting", "upload"]) {
+    const field = (name: string) =>
+      prefix ? prefix + name[0].toUpperCase() + name.slice(1) : name;
+    for (const [key, value] of Object.entries({
+      transcriptionMode: "providers",
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionModel: "local-flow-transcription",
+      cloudTranscriptionBaseUrl: localFlowProfile.cloudTranscriptionBaseUrl,
+    }))
+      localStorage.setItem(field(key), String(value));
+  }
+  localStorage.setItem("showTranscriptionPreview", "false");
+  localStorage.setItem("_localFlowOpenRouterApplied", "1");
+}
+
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(
     isBrowser ? localStorage.getItem("uiLanguage") || i18n.language : null

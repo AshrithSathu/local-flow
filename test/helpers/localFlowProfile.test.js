@@ -14,11 +14,12 @@ test("the personal profile routes dictation and cleanup to authenticated remote 
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const state = useSettingsStore.getState();
   assert.equal(state.useLocalWhisper, false);
+  assert.equal(state.showTranscriptionPreview, false);
   assert.equal(state.allowLocalFallback, false);
   assert.equal(state.transcriptionMode, "providers");
   assert.equal(state.cloudTranscriptionMode, "byok");
-  assert.equal(state.cloudTranscriptionProvider, "deepgram");
-  assert.equal(state.cloudTranscriptionModel, "nova-3");
+  assert.equal(state.cloudTranscriptionProvider, "custom");
+  assert.equal(state.cloudTranscriptionModel, "local-flow-transcription");
   assert.match(state.cloudTranscriptionBaseUrl, /^https:\/\/local-flow-personal\..*\/v1$/);
   assert.equal(state.cleanupCloudBaseUrl, state.cloudTranscriptionBaseUrl);
   assert.equal(state.cleanupProvider, "custom");
@@ -26,15 +27,12 @@ test("the personal profile routes dictation and cleanup to authenticated remote 
     assert.equal(state[`${prefix}TranscriptionMode`], "providers");
     assert.equal(state[`${prefix}UseLocalWhisper`], false);
     assert.equal(state[`${prefix}CloudTranscriptionMode`], "byok");
-    assert.equal(
-      state[`${prefix}CloudTranscriptionProvider`],
-      prefix === "meeting" ? "deepgram" : "custom"
-    );
+    assert.equal(state[`${prefix}CloudTranscriptionProvider`], "custom");
     assert.equal(state[`${prefix}CloudTranscriptionBaseUrl`], state.cloudTranscriptionBaseUrl);
   }
   const { resolveTranscriptionRoute } = await vite.ssrLoadModule("/helpers/transcriptionRoute.ts");
   const route = resolveTranscriptionRoute({ settings: state });
-  assert.equal(route.model, "cloudflare-nova-3");
+  assert.equal(route.model, "local-flow-transcription");
   assert.equal(route.endpoint, `${state.cloudTranscriptionBaseUrl}/audio/transcriptions`);
   assert.deepEqual(route.auth, { scheme: "bearer", keyRef: "custom" });
   assert.equal(state.autoGenerateNoteTitle, false);

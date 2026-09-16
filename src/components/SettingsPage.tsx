@@ -661,10 +661,9 @@ function TranscriptionSection({
       (model) => model.id === cloudTranscriptionModel && model.streaming
     )
   );
-  const previewAvailable = supportsLiveTranscriptionPreview(
-    effectiveTranscriptionMode,
-    selectedCloudModelStreams
-  );
+  const previewAvailable =
+    !IS_LOCAL_FLOW &&
+    supportsLiveTranscriptionPreview(effectiveTranscriptionMode, selectedCloudModelStreams);
 
   const renderPreviewToggle = () => (
     <SettingsPanel>
@@ -1005,13 +1004,17 @@ function SpeechToTextTabs({
   renderUpload: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useSubTab<SpeechTab>("settings.speechToTextTab", SPEECH_TABS, initialTab);
+  const [tab, setTab] = useSubTab<SpeechTab>(
+    "settings.speechToTextTab",
+    IS_LOCAL_FLOW ? SPEECH_TABS.filter((id) => id !== "noteRecording") : SPEECH_TABS,
+    initialTab
+  );
 
   const subTabs = [
     { id: "dictation", name: t("settingsPage.speechToText.tabs.dictation") },
     { id: "noteRecording", name: t("settingsPage.speechToText.tabs.noteRecording") },
     { id: "upload", name: t("settingsPage.speechToText.tabs.upload") },
-  ];
+  ].filter((item) => !IS_LOCAL_FLOW || item.id !== "noteRecording");
 
   return (
     <div className="space-y-4">
@@ -1034,7 +1037,9 @@ function SpeechToTextTabs({
         }
       />
       <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
-      <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
+      {!IS_LOCAL_FLOW && (
+        <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
+      )}
       <TabPanel active={tab === "upload"}>{renderUpload()}</TabPanel>
     </div>
   );
@@ -1078,7 +1083,7 @@ function LlmsTabs({
         title={IS_LOCAL_FLOW ? "Text cleanup" : t("settingsPage.llms.title")}
         description={
           IS_LOCAL_FLOW
-            ? "Optional cleanup runs on Cloudflare. Turn it off to keep the raw transcript."
+            ? "Optional cleanup runs on OpenRouter. Turn it off to keep the raw transcript."
             : t("settingsPage.llms.description")
         }
       />
@@ -4100,66 +4105,68 @@ EOF`,
             )}
 
             {/* Meeting Mode Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("settingsPage.general.meetingHotkey.title")}
-                description={t("settingsPage.general.meetingHotkey.description")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyListInput
-                    value={meetingKey}
-                    onChange={(list) => registerMeetingHotkey(list)}
-                    onClear={async (): Promise<boolean> => {
-                      const result = await window.electronAPI?.registerMeetingHotkey?.("");
-                      if (!result?.success) {
-                        showAlertDialog({
-                          title: t("hooks.hotkeyRegistration.titles.notRegistered"),
-                          description:
-                            result?.message ||
-                            t("hooks.hotkeyRegistration.errors.couldNotRegister"),
-                        });
-                        return false;
+            {!IS_LOCAL_FLOW && (
+              <div>
+                <SectionHeader
+                  title={t("settingsPage.general.meetingHotkey.title")}
+                  description={t("settingsPage.general.meetingHotkey.description")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <HotkeyListInput
+                      value={meetingKey}
+                      onChange={(list) => registerMeetingHotkey(list)}
+                      onClear={async (): Promise<boolean> => {
+                        const result = await window.electronAPI?.registerMeetingHotkey?.("");
+                        if (!result?.success) {
+                          showAlertDialog({
+                            title: t("hooks.hotkeyRegistration.titles.notRegistered"),
+                            description:
+                              result?.message ||
+                              t("hooks.hotkeyRegistration.errors.couldNotRegister"),
+                          });
+                          return false;
+                        }
+                        setMeetingKey("");
+                        return true;
+                      }}
+                      validate={validateMeetingHotkey}
+                      disabled={isMeetingHotkeyRegistering}
+                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    />
+                  </SettingsPanelRow>
+                  <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/70 dark:border-white/10">
+                    <span className="text-xs text-muted-foreground/80">
+                      {t("settingsPage.general.meetingHotkey.layoutLabel")}
+                    </span>
+                    <Select
+                      value={meetingHotkeyLayoutMode}
+                      onValueChange={(value) =>
+                        setMeetingHotkeyLayoutMode(value as "side-panel" | "full-width")
                       }
-                      setMeetingKey("");
-                      return true;
-                    }}
-                    validate={validateMeetingHotkey}
-                    disabled={isMeetingHotkeyRegistering}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                  />
-                </SettingsPanelRow>
-                <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/70 dark:border-white/10">
-                  <span className="text-xs text-muted-foreground/80">
-                    {t("settingsPage.general.meetingHotkey.layoutLabel")}
-                  </span>
-                  <Select
-                    value={meetingHotkeyLayoutMode}
-                    onValueChange={(value) =>
-                      setMeetingHotkeyLayoutMode(value as "side-panel" | "full-width")
-                    }
-                  >
-                    <SelectTrigger className="h-7 w-36 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        value="full-width"
-                        className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
-                      >
-                        {t("settingsPage.general.meetingHotkey.layoutFullWidth")}
-                      </SelectItem>
-                      <SelectItem
-                        value="side-panel"
-                        className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
-                      >
-                        {t("settingsPage.general.meetingHotkey.layoutSidePanel")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
+                    >
+                      <SelectTrigger className="h-7 w-36 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          value="full-width"
+                          className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
+                        >
+                          {t("settingsPage.general.meetingHotkey.layoutFullWidth")}
+                        </SelectItem>
+                        <SelectItem
+                          value="side-panel"
+                          className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
+                        >
+                          {t("settingsPage.general.meetingHotkey.layoutSidePanel")}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
           </div>
         );
 
@@ -5010,7 +5017,7 @@ EOF`,
               IS_LOCAL_FLOW ? (
                 <SettingsRow
                   label="Clean up dictated text"
-                  description="Already formatted text is delivered immediately. Cloudflare tidies punctuation and filler words when needed."
+                  description="Already formatted text is delivered immediately. OpenRouter tidies punctuation and filler words when needed."
                 >
                   <Toggle
                     checked={useCleanupModel}

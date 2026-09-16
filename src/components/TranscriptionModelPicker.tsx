@@ -523,18 +523,14 @@ export default function TranscriptionModelPicker({
     const availableIds = new Set(availableCloudProviders.map((p) => p.id));
     if (!streamingOnly) availableIds.add("custom");
     const tabs = CLOUD_PROVIDER_TABS.filter(
-      (provider) =>
-        availableIds.has(provider.id) &&
-        (!IS_LOCAL_FLOW || ["deepgram", "custom"].includes(provider.id))
+      (provider) => availableIds.has(provider.id) && (!IS_LOCAL_FLOW || provider.id === "custom")
     ).map((provider) =>
       IS_LOCAL_FLOW && provider.id === "deepgram"
         ? { ...provider, name: "Cloudflare Nova-3" }
         : provider.id === "custom"
           ? {
               ...provider,
-              name: IS_LOCAL_FLOW
-                ? "Cloudflare Whisper (batch)"
-                : t("transcription.customProvider"),
+              name: IS_LOCAL_FLOW ? "OpenRouter Whisper Turbo" : t("transcription.customProvider"),
             }
           : provider
     );
@@ -1238,7 +1234,9 @@ export default function TranscriptionModelPicker({
                   <ApiKeyInput
                     apiKey={customTranscriptionApiKey}
                     setApiKey={setCustomTranscriptionApiKey}
-                    label={t("transcription.apiKeyOptional")}
+                    label={
+                      IS_LOCAL_FLOW ? "Backend access token" : t("transcription.apiKeyOptional")
+                    }
                     helpText=""
                   />
 
@@ -1252,7 +1250,8 @@ export default function TranscriptionModelPicker({
                         selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
                       }
                       onChange={(e) => handleCloudModelSelect(e.target.value)}
-                      placeholder="whisper-1"
+                      placeholder={IS_LOCAL_FLOW ? "local-flow-transcription" : "whisper-1"}
+                      readOnly={IS_LOCAL_FLOW}
                       className="h-8 text-sm"
                     />
                   </div>

@@ -329,12 +329,12 @@ export function resolveTranscriptionRoute({
     return { transport: "local" };
   }
 
-  if (IS_LOCAL_FLOW && s.cloudTranscriptionProvider === "deepgram")
+  if (IS_LOCAL_FLOW && ["deepgram", "custom"].includes(s.cloudTranscriptionProvider || ""))
     return {
       transport: "http-batch",
       provider: "custom",
       endpoint: `${localFlowProfile.cloudTranscriptionBaseUrl}/audio/transcriptions`,
-      model: "cloudflare-nova-3",
+      model: "local-flow-transcription",
       auth: { scheme: "bearer", keyRef: "custom" },
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
       language,

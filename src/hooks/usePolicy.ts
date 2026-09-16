@@ -1,3 +1,4 @@
+import { IS_LOCAL_FLOW } from "../config/localFlow";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
@@ -30,7 +31,10 @@ export function useTranscriptionContextAllowed(context: TranscriptionPolicyConte
       getTranscriptionSelection(selectPolicyEffectiveSettings(settings, snapshot), context)
     )
   );
-  return isTranscriptionSelectionAllowed(snapshot, selection);
+  return (
+    !(IS_LOCAL_FLOW && context === "meeting") &&
+    isTranscriptionSelectionAllowed(snapshot, selection)
+  );
 }
 
 interface PolicyModeOptions<T> {

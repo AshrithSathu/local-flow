@@ -186,7 +186,7 @@ export function InferenceModeSelector({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-foreground">
-                      {IS_LOCAL_FLOW && mode.id === "providers" ? "Cloudflare" : mode.label}
+                      {IS_LOCAL_FLOW && mode.id === "providers" ? "OpenRouter" : mode.label}
                     </span>
                     {isActive && !isDisabled && (
                       <span className="text-xs font-medium text-primary bg-primary/10 dark:bg-primary/15 px-1.5 py-px rounded-sm">
