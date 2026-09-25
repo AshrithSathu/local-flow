@@ -11,7 +11,7 @@ const Module = require("module");
 const tmpUserData = fs.mkdtempSync(path.join(os.tmpdir(), "ow-secret-test-"));
 process.resourcesPath = tmpUserData; // Electron-only global; harmless dummy for the .env fallback scan
 const fakeElectron = {
-  app: { getPath: () => tmpUserData },
+  app: { getPath: () => tmpUserData, getName: () => "OpenWhispr" },
   safeStorage: { isEncryptionAvailable: () => false },
 };
 const origLoad = Module._load;
@@ -23,6 +23,28 @@ Module._load = function (request, ...rest) {
 
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const EnvironmentManager = require("../../src/helpers/environment");
+
+test("personal startup restores both backend credentials even when the app name is OpenWhispr", async () => {
+  const env = new EnvironmentManager();
+  const saved = [];
+  env._migrateToSecureStorage = async () => {};
+  env._loadAllSecrets = async () => {};
+  env._encryptionAvailable = () => true;
+  env._saveSecretKey = async (name, value) => saved.push([name, value]);
+  process.env.LOCAL_FLOW = "1";
+  process.env.LOCAL_FLOW_ACCESS_TOKEN = "test-backend-token";
+  try {
+    await env.init();
+    assert.deepEqual(saved, [
+      ["CUSTOM_TRANSCRIPTION_API_KEY", "test-backend-token"],
+      ["CUSTOM_CLEANUP_API_KEY", "test-backend-token"],
+    ]);
+    assert.equal(process.env.LOCAL_FLOW_ACCESS_TOKEN, undefined);
+  } finally {
+    delete process.env.LOCAL_FLOW;
+    delete process.env.LOCAL_FLOW_ACCESS_TOKEN;
+  }
+});
 
 test("manifest entries are unique and complete", () => {
   const seen = { base: new Set(), env: new Set(), storeKey: new Set() };

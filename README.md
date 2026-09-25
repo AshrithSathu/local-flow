@@ -62,7 +62,7 @@ Use this command rather than upstream `npm run build`, which downloads local mod
 node scripts/local-flow.cjs start
 ```
 
-The first start imports `ACCESS_TOKEN` from `.secrets.json` into encrypted OS-backed credential storage. No credentials are embedded in the app build. Later normal launches use the saved token. The start script prefers an installed `/Applications/Local Flow.app`, so install the latest build before starting it.
+The first start imports `ACCESS_TOKEN` from `.secrets.json` into encrypted OS-backed credential storage. In Settings → Speech-to-Text, **Backend access token** must be `ACCESS_TOKEN`, not the OpenRouter API key. No credentials are embedded in the app build. Later normal launches use the saved token. The start script prefers an installed `/Applications/Local Flow.app`, so install the latest build before starting it.
 
 Grant **Microphone** access for dictation and **Accessibility** access for automatic pasting. Select your microphone and Hold shortcut. Speech-to-Text shows **OpenRouter Whisper Turbo**. No live preview or live note recording is available. Cleanup can be disabled to keep the raw recognition result.
 

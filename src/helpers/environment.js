@@ -104,7 +104,7 @@ class EnvironmentManager {
     }
     await this._loadAllSecrets();
     // Personal build bootstrap: immediately encrypt the generated backend token.
-    if (app.getName() === "Local Flow" && process.env.LOCAL_FLOW_ACCESS_TOKEN) {
+    if (process.env.LOCAL_FLOW === "1" && process.env.LOCAL_FLOW_ACCESS_TOKEN) {
       if (!this._encryptionAvailable())
         throw new Error("Secure credential storage is required for Local Flow");
       await this._saveSecretKey(
